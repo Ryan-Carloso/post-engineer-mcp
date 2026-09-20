@@ -29,7 +29,7 @@ Configure your agent (`opencode.json`, `claude_desktop_config.json`, `.mcp.json`
   "mcpServers": {
     "post-engineer": {
       "type": "local",
-      "command": ["npx", "-y", "@post-engineer/mcp"],
+      "command": ["npx", "-y", "post-engineer-mcp"],
       "environment": {
         "POST_ENGINEER_API_URL": "https://post-engineer.com",
         "POST_ENGINEER_API_KEY": "<MY_API_KEY>"

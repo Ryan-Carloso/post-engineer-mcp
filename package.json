@@ -1,5 +1,5 @@
 {
-  "name": "@post-engineer/mcp",
+  "name": "post-engineer-mcp",
   "version": "1.0.0",
   "type": "module",
   "description": "Post Engineer MCP Server for AI pair programming and agentic workflows",
@@ -12,7 +12,7 @@
     "access": "public"
   },
   "bin": {
-    "post-engineer-mcp": "./dist/index.js"
+    "post-engineer-mcp": "dist/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
