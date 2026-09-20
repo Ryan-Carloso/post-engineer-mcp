@@ -1,0 +1,141 @@
+const SERVICE_NAME = 'Post Engineer MCP';
+const MCP_ENDPOINT = 'https://mcp.post-engineer.com/';
+
+export const docsMarkdown: string = `# ${SERVICE_NAME}
+
+Remote MCP server for Post Engineer.
+
+## MCP endpoint
+
+Use this URL when connecting a remote MCP client:
+
+\`${MCP_ENDPOINT}\`
+
+The MCP endpoint accepts \`POST\` requests with the standard MCP Streamable HTTP transport.
+
+## Authentication
+
+Every MCP request must include the user's own Post Engineer API key:
+
+\`\`\`http
+Authorization: Bearer <USER_POST_ENGINEER_API_KEY>
+\`\`\`
+
+There is no global Post Engineer API key on this server. The key is read from each request and forwarded to Post Engineer for that request only.
+
+Never put the API key in the URL, a query string, source code, or a public repository.
+
+Create or revoke keys at [post-engineer.com/api-keys](https://post-engineer.com/api-keys).
+
+## ChatGPT
+
+1. Open ChatGPT on the web.
+2. Enable **Settings -> Security and login -> Developer mode**.
+3. Open **Apps** or **Plugins**, then choose **Add**.
+4. Enter \`${MCP_ENDPOINT}\` as the remote MCP URL.
+5. Configure the user's Post Engineer API key as Bearer authentication if the connection form supports it.
+6. Install the app, open a new chat, and select it with \`@\` or \`+\`.
+
+If the ChatGPT connection form requires OAuth instead of a manually supplied Bearer credential, this server needs an OAuth adapter before it can be used there. The MCP tools and endpoint remain compatible with other remote MCP clients.
+
+## Local clients
+
+For OpenCode, Claude Desktop, Cursor, and other local clients using stdio:
+
+\`\`\`json
+{
+  "mcpServers": {
+    "post-engineer": {
+      "type": "local",
+      "command": ["npx", "-y", "post-engineer-mcp"],
+      "environment": {
+        "POST_ENGINEER_API_KEY": "<USER_POST_ENGINEER_API_KEY>"
+      }
+    }
+  }
+}
+\`\`\`
+
+## Available tools
+
+- \`list_personas\`
+- \`list_voices\`
+- \`create_persona\`
+- \`update_persona\`
+- \`get_token_balance\`
+- \`generate_video_from_persona\`
+- \`get_video_status\`
+- \`list_social_accounts\`
+- \`schedule_video\`
+- \`list_schedules\`
+- \`cancel_schedule\`
+
+## Validation endpoints
+
+- JSON health check: [${MCP_ENDPOINT}health](https://mcp.post-engineer.com/health)
+- Markdown health check: [${MCP_ENDPOINT}health.md](https://mcp.post-engineer.com/health.md)
+- Browser documentation: [${MCP_ENDPOINT}docs](https://mcp.post-engineer.com/docs)
+- Raw documentation: [${MCP_ENDPOINT}docs.md](https://mcp.post-engineer.com/docs.md)
+
+## Manual checks
+
+\`\`\`bash
+curl -i https://mcp.post-engineer.com/health
+curl -i https://mcp.post-engineer.com/health.md
+curl -i https://mcp.post-engineer.com/docs
+curl -i https://mcp.post-engineer.com/docs.md
+curl -i -X POST https://mcp.post-engineer.com/ \\
+  -H 'Authorization: Bearer <USER_POST_ENGINEER_API_KEY>' \\
+  -H 'Content-Type: application/json' \\
+  --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"manual-check","version":"1.0.0"}}}'
+\`\`\`
+`;
+
+export const healthMarkdown: string = `# ${SERVICE_NAME} health
+
+Status: ok
+
+The HTTP process is running. This endpoint does not authenticate or call the Post Engineer API.
+`;
+
+export const docsHtml: string = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${SERVICE_NAME}</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      body { max-width: 880px; margin: 0 auto; padding: 32px 20px; line-height: 1.6; }
+      code { background: #eef2f7; border-radius: 6px; color: #18202a; padding: 2px 5px; }
+      pre { background: #20242b; border-radius: 6px; color: #f4f7fa; overflow-x: auto; padding: 16px; }
+      a { color: #4ea1ff; }
+      .card { border: 1px solid #555; border-radius: 10px; padding: 16px; }
+    </style>
+  </head>
+  <body>
+    <h1>${SERVICE_NAME}</h1>
+    <p>Remote MCP server for Post Engineer.</p>
+    <div class="card">
+      <strong>MCP endpoint</strong>
+      <p><code>${MCP_ENDPOINT}</code></p>
+      <p>Use the user's API key as <code>Authorization: Bearer &lt;API_KEY&gt;</code>. There is no global server key.</p>
+    </div>
+    <h2>ChatGPT</h2>
+    <ol>
+      <li>Enable Developer mode in ChatGPT under Settings, Security and login.</li>
+      <li>Open Apps or Plugins and choose Add.</li>
+      <li>Enter <code>${MCP_ENDPOINT}</code>.</li>
+      <li>Configure the user's API key as Bearer authentication if supported by the connection form.</li>
+      <li>Install the app and select it in a new chat with <code>@</code> or <code>+</code>.</li>
+    </ol>
+    <h2>Validation</h2>
+    <ul>
+      <li><a href="/health">JSON health</a></li>
+      <li><a href="/health.md">Markdown health</a></li>
+      <li><a href="/docs.md">Raw Markdown documentation</a></li>
+    </ul>
+    <h2>Available tools</h2>
+    <p><code>list_personas</code>, <code>list_voices</code>, <code>create_persona</code>, <code>update_persona</code>, <code>get_token_balance</code>, <code>generate_video_from_persona</code>, <code>get_video_status</code>, <code>list_social_accounts</code>, <code>schedule_video</code>, <code>list_schedules</code>, <code>cancel_schedule</code></p>
+  </body>
+</html>`;
