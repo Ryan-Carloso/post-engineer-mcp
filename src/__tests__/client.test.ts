@@ -97,6 +97,40 @@ describe('PostEngineerClient', () => {
     expect(result).toEqual(mockList);
   });
 
+  it('lists voices successfully', async () => {
+    const mockVoices = {
+      voices: [{ id: 'calm' }, { id: 'energetic' }],
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockVoices,
+    });
+
+    const result = await client.listVoices();
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${baseUrl}/api/persona/voices`,
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${apiKey}`,
+        }),
+      })
+    );
+    expect(result).toEqual(mockVoices);
+  });
+
+  it('throws when listing voices fails', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      text: async () => 'Voices unavailable.',
+    });
+
+    await expect(client.listVoices()).rejects.toThrow(/Failed to list voices: 502/);
+  });
+
   it('triggers video job from persona successfully', async () => {
     const mockJob = {
       success: true,

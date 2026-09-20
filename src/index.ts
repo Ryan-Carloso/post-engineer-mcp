@@ -6,6 +6,7 @@ import { PostEngineerClient } from './client.js';
 import {
   handleCreatePersona,
   handleListPersonas,
+  handleListVoices,
   handleGenerateVideo,
   handleGetVideoStatus,
   handleScheduleVideo,
@@ -44,6 +45,15 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
     {},
     async () => {
       return handleListPersonas(apiClient);
+    }
+  );
+
+  server.tool(
+    'list_voices',
+    'List all available persona voices (voiceId options) for the authenticated user.',
+    {},
+    async () => {
+      return handleListVoices(apiClient);
     }
   );
 

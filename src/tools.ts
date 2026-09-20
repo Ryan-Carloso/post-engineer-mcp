@@ -19,6 +19,8 @@ export const CreatePersonaSchema = z.object({
 
 export const ListPersonasSchema = z.object({});
 
+export const ListVoicesSchema = z.object({});
+
 export const GenerateVideoSchema = z.object({
   personaId: z.string().min(1, 'personaId is required'),
   scriptPrompt: z.string().optional(),
@@ -88,6 +90,32 @@ export async function handleListPersonas(
         {
           type: 'text',
           text: `Error listing personas: ${(error as Error).message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+export async function handleListVoices(
+  client: PostEngineerClient
+): Promise<McpToolResponse> {
+  try {
+    const result = await client.listVoices();
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error listing voices: ${(error as Error).message}`,
         },
       ],
       isError: true,

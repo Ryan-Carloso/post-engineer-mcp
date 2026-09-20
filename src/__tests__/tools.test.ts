@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { handleCreatePersona, handleGenerateVideo, handleScheduleVideo } from '../tools.js';
+import { handleCreatePersona, handleGenerateVideo, handleListVoices, handleScheduleVideo } from '../tools.js';
 import type { PostEngineerClient } from '../client.js';
 
 describe('MCP Tool Handlers', () => {
@@ -7,6 +7,7 @@ describe('MCP Tool Handlers', () => {
     createPersona: vi.fn(),
     listPersonas: vi.fn(),
     generateVideoJob: vi.fn(),
+    listVoices: vi.fn(),
     getVideoStatus: vi.fn(),
     createSchedule: vi.fn(),
   } as unknown as PostEngineerClient;
@@ -48,6 +49,17 @@ describe('MCP Tool Handlers', () => {
       scriptPrompt: 'Top 3 AI coding assistants in 2026',
     });
     expect(response.content[0].text).toContain('task-789');
+  });
+
+  it('handleListVoices returns the voice catalog', async () => {
+    vi.mocked(mockClient.listVoices).mockResolvedValue({
+      voices: [{ id: 'calm' }, { id: 'energetic' }],
+    });
+
+    const response = await handleListVoices(mockClient);
+
+    expect(mockClient.listVoices).toHaveBeenCalledOnce();
+    expect(response.content[0].text).toContain('calm');
   });
 
   it('handleScheduleVideo returns error when < 24h constraint violated', async () => {

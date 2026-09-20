@@ -102,6 +102,21 @@ export class PostEngineerClient {
     return response.json();
   }
 
+  async listVoices(): Promise<unknown> {
+    const url = `${this.baseUrl}/api/persona/voices`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to list voices: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
+
   async generateVideoJob(input: GenerateVideoJobInput): Promise<unknown> {
     const url = `${this.baseUrl}/api/persona/video-job`;
     const response = await fetch(url, {

@@ -58,6 +58,7 @@ export POST_ENGINEER_API_KEY="<MY_API_KEY>"
 
 - `create_persona`: create an AI persona (avatar, voice, language, niche).
 - `list_personas`: list existing personas.
+- `list_voices`: list available persona voices (live catalog from the platform, not hardcoded).
 - `generate_video_from_persona`: generate a video with a persona.
 - `get_video_status`: check generation status and get the final video URL.
 - `schedule_video`: schedule automated posting (must be at least 24h in advance).
