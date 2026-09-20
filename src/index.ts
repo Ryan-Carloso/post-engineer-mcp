@@ -7,6 +7,11 @@ import {
   handleCreatePersona,
   handleListPersonas,
   handleListVoices,
+  handleUpdatePersona,
+  handleListSocialAccounts,
+  handleListSchedules,
+  handleCancelSchedule,
+  handleGetTokenBalance,
   handleGenerateVideo,
   handleGetVideoStatus,
   handleScheduleVideo,
@@ -16,7 +21,7 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
   const apiClient = client ?? new PostEngineerClient();
   const server = new McpServer({
     name: 'post-engineer-mcp',
-    version: '1.0.0',
+    version: '1.1.0',
   });
 
   server.tool(
@@ -58,6 +63,63 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
   );
 
   server.tool(
+    'update_persona',
+    'Update an existing AI persona (only the provided fields change).',
+    {
+      personaId: z.string().min(1, 'personaId is required').describe('The ID of the persona to update'),
+      name: z.string().min(1).optional().describe('New name for the persona'),
+      avatarUrl: z.string().url().optional().nullable().describe('New public avatar image URL'),
+      voiceId: z.string().optional().describe('New voice ID (see list_voices)'),
+      language: z.string().optional().describe('New language code (e.g. pt-BR, en-US)'),
+      videoAspect: z.enum(['9:16', '16:9']).optional().describe('New video aspect ratio'),
+      scriptPrompt: z.string().optional().describe('New system prompt instructions for video scripts'),
+      paragraphNumber: z.number().int().min(1).max(10).optional().describe('New number of paragraphs'),
+      niche: z.string().max(300).optional().describe('New content niche topic'),
+    },
+    async (args) => {
+      return handleUpdatePersona(apiClient, args);
+    }
+  );
+
+  server.tool(
+    'list_social_accounts',
+    'List connected social accounts (YouTube, Instagram, LinkedIn) with the account IDs needed for schedule_video.',
+    {},
+    async () => {
+      return handleListSocialAccounts(apiClient);
+    }
+  );
+
+  server.tool(
+    'list_schedules',
+    'List all automation schedules for the authenticated user.',
+    {},
+    async () => {
+      return handleListSchedules(apiClient);
+    }
+  );
+
+  server.tool(
+    'cancel_schedule',
+    'Cancel (delete) an automation schedule by its schedule ID. Use list_schedules to find the ID.',
+    {
+      scheduleId: z.string().min(1, 'scheduleId is required').describe('The ID of the schedule to cancel'),
+    },
+    async (args) => {
+      return handleCancelSchedule(apiClient, args);
+    }
+  );
+
+  server.tool(
+    'get_token_balance',
+    'Get the prepaid token wallet balance. Check before triggering video generation, which costs tokens.',
+    {},
+    async () => {
+      return handleGetTokenBalance(apiClient);
+    }
+  );
+
+  server.tool(
     'generate_video_from_persona',
     'Trigger video generation using an existing persona.',
     {
@@ -82,7 +144,7 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
 
   server.tool(
     'schedule_video',
-    'Schedule automated video generation and posting to social channels. IMPORTANT: Schedules must be between 24h and 30 days in advance.',
+    'Schedule automated video generation and posting to social channels. IMPORTANT: Schedules must be between 24h and 30 days in advance. Each provider requires at least one account ID — discover them with list_social_accounts first.',
     {
       personaId: z.string().min(1, 'personaId is required').describe('The ID of the persona'),
       providers: z

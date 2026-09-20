@@ -56,12 +56,17 @@ export POST_ENGINEER_API_KEY="<MY_API_KEY>"
 
 ## Tools
 
-- `create_persona`: create an AI persona (avatar, voice, language, niche).
 - `list_personas`: list existing personas.
 - `list_voices`: list available persona voices (live catalog from the platform, not hardcoded).
+- `create_persona`: create an AI persona (avatar, voice, language, niche).
+- `update_persona`: update an existing persona (only the provided fields change).
+- `get_token_balance`: get the prepaid token wallet balance. Check before generating videos, which cost tokens.
 - `generate_video_from_persona`: generate a video with a persona.
 - `get_video_status`: check generation status and get the final video URL.
-- `schedule_video`: schedule automated posting (must be at least 24h in advance).
+- `list_social_accounts`: list connected social accounts with the account IDs needed for scheduling.
+- `schedule_video`: schedule automated posting (must be at least 24h in advance; each provider needs an account ID from `list_social_accounts`).
+- `list_schedules`: list automation schedules.
+- `cancel_schedule`: cancel a schedule by its ID.
 
 ## Links
 

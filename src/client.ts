@@ -23,6 +23,18 @@ export interface GenerateVideoJobInput {
   scriptPrompt?: string;
 }
 
+export interface UpdatePersonaInput {
+  personaId: string;
+  name?: string;
+  avatarUrl?: string | null;
+  voiceId?: string;
+  language?: string;
+  videoAspect?: '9:16' | '16:9';
+  scriptPrompt?: string;
+  paragraphNumber?: number;
+  niche?: string;
+}
+
 export interface CreateScheduleInput {
   personaId: string;
   providers: ('youtube' | 'instagram' | 'linkedin')[];
@@ -112,6 +124,91 @@ export class PostEngineerClient {
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Failed to list voices: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
+
+  async updatePersona(input: UpdatePersonaInput): Promise<unknown> {
+    const url = `${this.baseUrl}/api/persona?personaId=${encodeURIComponent(input.personaId)}`;
+    const formData = new FormData();
+    if (input.name !== undefined) formData.set('name', input.name);
+    if (input.avatarUrl !== undefined && input.avatarUrl !== null) formData.set('avatarUrl', input.avatarUrl);
+    if (input.voiceId !== undefined) formData.set('voiceId', input.voiceId);
+    if (input.language !== undefined) formData.set('language', input.language);
+    if (input.videoAspect !== undefined) formData.set('videoAspect', input.videoAspect);
+    if (input.scriptPrompt !== undefined) formData.set('scriptPrompt', input.scriptPrompt);
+    if (input.paragraphNumber !== undefined) formData.set('paragraphNumber', String(input.paragraphNumber));
+    if (input.niche !== undefined) formData.set('niche', input.niche);
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: this.getHeaders(false),
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to update persona: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
+
+  async listSocialAccounts(): Promise<unknown> {
+    const url = `${this.baseUrl}/api/account`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to list social accounts: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
+
+  async listSchedules(): Promise<unknown> {
+    const url = `${this.baseUrl}/api/schedule`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to list schedules: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
+
+  async cancelSchedule(scheduleId: string): Promise<unknown> {
+    const url = `${this.baseUrl}/api/schedule?id=${encodeURIComponent(scheduleId)}`;
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to cancel schedule: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
+
+  async getTokenBalance(): Promise<unknown> {
+    const url = `${this.baseUrl}/api/billing/tokens`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to get token balance: ${response.status} ${errorText}`);
     }
 
     return response.json();

@@ -21,6 +21,28 @@ export const ListPersonasSchema = z.object({});
 
 export const ListVoicesSchema = z.object({});
 
+export const UpdatePersonaSchema = z.object({
+  personaId: z.string().min(1, 'personaId is required'),
+  name: z.string().min(1).optional(),
+  avatarUrl: z.string().url().optional().nullable(),
+  voiceId: z.string().optional(),
+  language: z.string().optional(),
+  videoAspect: z.enum(['9:16', '16:9']).optional(),
+  scriptPrompt: z.string().optional(),
+  paragraphNumber: z.number().int().min(1).max(10).optional(),
+  niche: z.string().max(300).optional(),
+});
+
+export const ListSocialAccountsSchema = z.object({});
+
+export const ListSchedulesSchema = z.object({});
+
+export const CancelScheduleSchema = z.object({
+  scheduleId: z.string().min(1, 'scheduleId is required'),
+});
+
+export const GetTokenBalanceSchema = z.object({});
+
 export const GenerateVideoSchema = z.object({
   personaId: z.string().min(1, 'personaId is required'),
   scriptPrompt: z.string().optional(),
@@ -116,6 +138,138 @@ export async function handleListVoices(
         {
           type: 'text',
           text: `Error listing voices: ${(error as Error).message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+export async function handleUpdatePersona(
+  client: PostEngineerClient,
+  args: z.infer<typeof UpdatePersonaSchema>
+): Promise<McpToolResponse> {
+  try {
+    const result = await client.updatePersona(args);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Persona updated successfully: ${JSON.stringify(result, null, 2)}`,
+        },
+      ],
+    };
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error updating persona: ${(error as Error).message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+export async function handleListSocialAccounts(
+  client: PostEngineerClient
+): Promise<McpToolResponse> {
+  try {
+    const result = await client.listSocialAccounts();
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error listing social accounts: ${(error as Error).message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+export async function handleListSchedules(
+  client: PostEngineerClient
+): Promise<McpToolResponse> {
+  try {
+    const result = await client.listSchedules();
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error listing schedules: ${(error as Error).message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+export async function handleCancelSchedule(
+  client: PostEngineerClient,
+  args: z.infer<typeof CancelScheduleSchema>
+): Promise<McpToolResponse> {
+  try {
+    const result = await client.cancelSchedule(args.scheduleId);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Schedule cancelled successfully: ${JSON.stringify(result, null, 2)}`,
+        },
+      ],
+    };
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error cancelling schedule: ${(error as Error).message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+export async function handleGetTokenBalance(
+  client: PostEngineerClient
+): Promise<McpToolResponse> {
+  try {
+    const result = await client.getTokenBalance();
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error getting token balance: ${(error as Error).message}`,
         },
       ],
       isError: true,

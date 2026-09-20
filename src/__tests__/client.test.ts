@@ -131,6 +131,118 @@ describe('PostEngineerClient', () => {
     await expect(client.listVoices()).rejects.toThrow(/Failed to list voices: 502/);
   });
 
+  it('updates persona with only provided fields as multipart', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true }),
+    });
+
+    const result = await client.updatePersona({ personaId: 'persona-123', voiceId: 'energetic' });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${baseUrl}/api/persona?personaId=persona-123`,
+      expect.objectContaining({
+        method: 'PATCH',
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${apiKey}`,
+        }),
+      })
+    );
+    const request = vi.mocked(global.fetch).mock.calls[0]?.[1];
+    expect(request?.body).toBeInstanceOf(FormData);
+    const formData = request?.body as FormData;
+    expect(formData.get('voiceId')).toBe('energetic');
+    expect(formData.get('name')).toBeNull();
+    expect(new Headers(request?.headers).get('content-type')).toBeNull();
+    expect(result).toEqual({ success: true });
+  });
+
+  it('throws when updating persona fails', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: async () => 'Persona not found.',
+    });
+
+    await expect(client.updatePersona({ personaId: 'missing' })).rejects.toThrow(
+      /Failed to update persona: 404/
+    );
+  });
+
+  it('lists social accounts successfully', async () => {
+    const mockAccounts = {
+      authenticated: true,
+      accounts: [{ provider: 'youtube', channelId: 'chan-1' }],
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockAccounts,
+    });
+
+    const result = await client.listSocialAccounts();
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${baseUrl}/api/account`,
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${apiKey}`,
+        }),
+      })
+    );
+    expect(result).toEqual(mockAccounts);
+  });
+
+  it('lists schedules successfully', async () => {
+    const mockSchedules = { success: true, schedules: [{ id: 'sched-1' }] };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockSchedules,
+    });
+
+    const result = await client.listSchedules();
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${baseUrl}/api/schedule`,
+      expect.objectContaining({ method: 'GET' })
+    );
+    expect(result).toEqual(mockSchedules);
+  });
+
+  it('cancels a schedule by id', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true }),
+    });
+
+    await client.cancelSchedule('sched-1');
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${baseUrl}/api/schedule?id=sched-1`,
+      expect.objectContaining({ method: 'DELETE' })
+    );
+  });
+
+  it('gets the token balance successfully', async () => {
+    const mockBalance = { success: true, balance: 8, free: 3 };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockBalance,
+    });
+
+    const result = await client.getTokenBalance();
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${baseUrl}/api/billing/tokens`,
+      expect.objectContaining({ method: 'GET' })
+    );
+    expect(result).toEqual(mockBalance);
+  });
+
   it('triggers video job from persona successfully', async () => {
     const mockJob = {
       success: true,
