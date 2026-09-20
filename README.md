@@ -20,7 +20,7 @@ This MCP package does not replace the site — it connects an AI agent to your a
 - Node.js 20+
 - API key generated at https://post-engineer.com/api-keys
 
-## Use without cloning (recommended)
+## Use
 
 Configure your agent (`opencode.json`, `claude_desktop_config.json`, `.mcp.json`, or Cursor settings):
 
