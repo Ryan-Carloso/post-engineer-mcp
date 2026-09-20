@@ -13,8 +13,6 @@ Public MCP (Model Context Protocol) server for [Post Engineer](https://post-engi
 - Schedule automated posting.
 - Generate and manage API keys at [https://post-engineer.com/api-keys](https://post-engineer.com/api-keys).
 
-This MCP package does not replace the site — it connects an AI agent to your account on that site through its API. The default API URL is `https://post-engineer.com`, configurable via `POST_ENGINEER_API_URL`.
-
 ## Requirements
 
 - Node.js 20+
