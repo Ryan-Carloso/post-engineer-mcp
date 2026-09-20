@@ -1,7 +1,6 @@
 import { validateScheduleAdvance } from './validator.js';
 
 export interface PostEngineerClientOptions {
-  baseUrl?: string;
   apiKey?: string;
 }
 
@@ -50,13 +49,15 @@ export interface CreateScheduleInput {
   _nowForTesting?: Date;
 }
 
+const PRODUCTION_API_URL = 'https://post-engineer.com';
+
 export class PostEngineerClient {
   private readonly baseUrl: string;
   private readonly apiKey?: string;
 
   constructor(options: PostEngineerClientOptions = {}) {
-    this.baseUrl = (options.baseUrl ?? process.env.POST_ENGINEER_API_URL ?? 'http://localhost:3434').replace(/\/+$/, '');
-    this.apiKey = options.apiKey ?? process.env.POST_ENGINEER_API_KEY;
+    this.baseUrl = PRODUCTION_API_URL;
+    this.apiKey = options.apiKey;
   }
 
   private getHeaders(includeContentType = true): Record<string, string> {

@@ -29,7 +29,6 @@ Configure your agent (`opencode.json`, `claude_desktop_config.json`, `.mcp.json`
       "type": "local",
       "command": ["npx", "-y", "post-engineer-mcp"],
       "environment": {
-        "POST_ENGINEER_API_URL": "https://post-engineer.com",
         "POST_ENGINEER_API_KEY": "<MY_API_KEY>"
       }
     }
@@ -47,10 +46,9 @@ pnpm build
 pnpm start
 ```
 
-Set the same environment variables locally:
+Set your API key locally (the API URL is built in and always points to production):
 
 ```bash
-export POST_ENGINEER_API_URL="https://post-engineer.com"
 export POST_ENGINEER_API_KEY="<MY_API_KEY>"
 ```
 

@@ -1,6 +1,6 @@
 {
   "name": "post-engineer-mcp",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "description": "Post Engineer MCP Server for AI pair programming and agentic workflows",
   "main": "dist/index.js",

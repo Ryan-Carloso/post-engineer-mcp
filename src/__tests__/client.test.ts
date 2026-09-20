@@ -3,12 +3,12 @@ import { PostEngineerClient } from '../client.js';
 
 describe('PostEngineerClient', () => {
   let client: PostEngineerClient;
-  const baseUrl = 'http://localhost:3434';
+  const baseUrl = 'https://post-engineer.com';
   const apiKey = 'test-token-123';
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    client = new PostEngineerClient({ baseUrl, apiKey });
+    client = new PostEngineerClient({ apiKey });
   });
 
   it('creates persona successfully', async () => {

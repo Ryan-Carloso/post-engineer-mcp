@@ -18,7 +18,7 @@ import {
 } from './tools.js';
 
 export function createPostEngineerMcpServer(client?: PostEngineerClient): McpServer {
-  const apiClient = client ?? new PostEngineerClient();
+  const apiClient = client ?? new PostEngineerClient({ apiKey: process.env.POST_ENGINEER_API_KEY });
   const server = new McpServer({
     name: 'post-engineer-mcp',
     version: '1.1.0',
