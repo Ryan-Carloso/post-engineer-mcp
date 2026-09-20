@@ -1,0 +1,119 @@
+#!/usr/bin/env node
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { z } from 'zod';
+import { PostEngineerClient } from './client.js';
+import {
+  handleCreatePersona,
+  handleListPersonas,
+  handleGenerateVideo,
+  handleGetVideoStatus,
+  handleScheduleVideo,
+} from './tools.js';
+
+export function createPostEngineerMcpServer(client?: PostEngineerClient): McpServer {
+  const apiClient = client ?? new PostEngineerClient();
+  const server = new McpServer({
+    name: 'post-engineer-mcp',
+    version: '1.0.0',
+  });
+
+  server.tool(
+    'create_persona',
+    'Create a new AI persona with avatar, voice, language, and niche prompt.',
+    {
+      name: z.string().min(1, 'Name is required').describe('Name of the persona'),
+      avatarUrl: z.string().url().optional().nullable().describe('Public URL to the persona avatar image'),
+      voiceId: z.string().default('alloy').describe('Voice ID to use (e.g. alloy, echo)'),
+      language: z.string().default('en-US').describe('Language code (e.g. pt-BR, en-US)'),
+      videoAspect: z.enum(['9:16', '16:9']).default('9:16').describe('Video aspect ratio'),
+      scriptPrompt: z.string().optional().default('').describe('System prompt instructions for video scripts'),
+      paragraphNumber: z.number().int().min(1).max(5).default(1).describe('Number of paragraphs'),
+      niche: z.string().optional().default('General').describe('Content niche topic'),
+      faceMixPercent: z.number().min(0).max(100).default(50),
+       faceQuality: z.enum(['ok', 'very_good']).default('very_good'),
+    },
+    async (args) => {
+      return handleCreatePersona(apiClient, args);
+    }
+  );
+
+  server.tool(
+    'list_personas',
+    'List all existing personas for the authenticated user.',
+    {},
+    async () => {
+      return handleListPersonas(apiClient);
+    }
+  );
+
+  server.tool(
+    'generate_video_from_persona',
+    'Trigger video generation using an existing persona.',
+    {
+      personaId: z.string().min(1, 'personaId is required').describe('The ID of the persona to generate video with'),
+      scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
+    },
+    async (args) => {
+      return handleGenerateVideo(apiClient, args);
+    }
+  );
+
+  server.tool(
+    'get_video_status',
+    'Check the generation status and fetch final video URLs for a taskId.',
+    {
+      taskId: z.string().min(1, 'taskId is required').describe('The video generation task ID'),
+    },
+    async (args) => {
+      return handleGetVideoStatus(apiClient, args);
+    }
+  );
+
+  server.tool(
+    'schedule_video',
+    'Schedule automated video generation and posting to social channels. IMPORTANT: Schedules must be between 24h and 30 days in advance.',
+    {
+      personaId: z.string().min(1, 'personaId is required').describe('The ID of the persona'),
+      providers: z
+        .array(z.enum(['youtube', 'instagram', 'linkedin']))
+        .min(1, 'At least one provider required')
+        .describe('Target social platforms'),
+      youtubeAccountIds: z.array(z.string()).optional().default([]),
+      instagramAccountIds: z.array(z.string()).optional().default([]),
+      linkedinAccountIds: z.array(z.string()).optional().default([]),
+      scheduledAt: z
+        .string()
+        .describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
+      daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
+      startHour: z.number().int().min(0).max(23).optional(),
+      endHour: z.number().int().min(0).max(23).optional(),
+      postsPerDay: z.number().int().min(1).max(10).optional(),
+      timezone: z.string().optional().default('UTC'),
+    },
+    async (args) => {
+      return handleScheduleVideo(apiClient, args);
+    }
+  );
+
+  return server;
+}
+
+import { fileURLToPath } from 'url';
+
+export function isMainModule(): boolean {
+  return process.argv[1] === fileURLToPath(import.meta.url);
+}
+
+async function main() {
+  const server = createPostEngineerMcpServer();
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+
+if (isMainModule()) {
+  main().catch((err) => {
+    console.error('Fatal MCP Server error:', err);
+    process.exit(1);
+  });
+}
