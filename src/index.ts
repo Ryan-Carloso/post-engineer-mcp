@@ -16,6 +16,7 @@ import {
   handleGetVideoStatus,
   handleScheduleVideo,
 } from './tools.js';
+import { startHttpServer } from './http.js';
 
 export function createPostEngineerMcpServer(client?: PostEngineerClient): McpServer {
   const apiClient = client ?? new PostEngineerClient({ apiKey: process.env.POST_ENGINEER_API_KEY });
@@ -178,6 +179,11 @@ export function isMainModule(): boolean {
 }
 
 async function main() {
+  if (process.argv.includes('--http')) {
+    await startHttpServer();
+    return;
+  }
+
   const server = createPostEngineerMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
