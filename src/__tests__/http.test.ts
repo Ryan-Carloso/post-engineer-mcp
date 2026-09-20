@@ -140,4 +140,70 @@ describe('remote HTTP server', () => {
     if (previousPort === undefined) delete process.env.MCP_PORT;
     else process.env.MCP_PORT = previousPort;
   });
+
+  it('serves RFC 9728 protected resource metadata for OAuth discovery', async () => {
+    const baseUrl = await startTestServer();
+
+    const metadata = await fetch(`${baseUrl}/.well-known/oauth-protected-resource`);
+    expect(metadata.status).toBe(200);
+    expect(metadata.headers.get('content-type')).toContain('application/json');
+    expect(await metadata.json()).toEqual({
+      resource: 'https://mcp.post-engineer.com',
+      authorization_servers: ['https://post-engineer.com'],
+      bearer_methods_supported: ['header'],
+      resource_documentation: 'https://mcp.post-engineer.com/docs',
+    });
+
+    const head = await fetch(`${baseUrl}/.well-known/oauth-protected-resource`, {
+      method: 'HEAD',
+    });
+    expect(head.status).toBe(200);
+
+    const post = await fetch(`${baseUrl}/.well-known/oauth-protected-resource`, {
+      method: 'POST',
+    });
+    expect(post.status).toBe(405);
+  });
+
+  it('points OAuth clients at the metadata URL on 401 responses', async () => {
+    const baseUrl = await startTestServer();
+
+    const response = await fetch(`${baseUrl}/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    expect(response.status).toBe(401);
+    const challenge = response.headers.get('www-authenticate') ?? '';
+    expect(challenge).toContain('Bearer');
+    expect(challenge).toContain(
+      'resource_metadata="https://mcp.post-engineer.com/.well-known/oauth-protected-resource"',
+    );
+  });
+
+  it('rejects cross-origin MCP requests to mitigate DNS rebinding', async () => {
+    const baseUrl = await startTestServer();
+    const origin = new URL(baseUrl).origin;
+
+    const forged = await fetch(`${baseUrl}/`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer user-api-key',
+        'Content-Type': 'application/json',
+        Origin: 'https://evil.example',
+      },
+      body: '{}',
+    });
+    expect(forged.status).toBe(403);
+
+    const sameOrigin = await fetch(`${baseUrl}/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: origin,
+      },
+      body: '{}',
+    });
+    expect(sameOrigin.status).toBe(401);
+  });
 });

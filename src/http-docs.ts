@@ -36,7 +36,7 @@ Create or revoke keys at [post-engineer.com/api-keys](https://post-engineer.com/
 5. Configure the user's Post Engineer API key as Bearer authentication if the connection form supports it.
 6. Install the app, open a new chat, and select it with \`@\` or \`+\`.
 
-If the ChatGPT connection form requires OAuth instead of a manually supplied Bearer credential, this server needs an OAuth adapter before it can be used there. The MCP tools and endpoint remain compatible with other remote MCP clients.
+If the ChatGPT connection form uses OAuth discovery, this server publishes RFC 9728 protected resource metadata at \`${MCP_ENDPOINT}.well-known/oauth-protected-resource\` pointing at \`https://post-engineer.com\` as the authorization server. The one-click OAuth login flow lands once the Post Engineer web app issues those tokens; until then, authenticate with the Bearer API key above. The MCP tools and endpoint remain compatible with other remote MCP clients.
 
 ## Local clients
 
@@ -134,6 +134,7 @@ export const docsHtml: string = `<!doctype html>
       <li><a href="/health">JSON health</a></li>
       <li><a href="/health.md">Markdown health</a></li>
       <li><a href="/docs.md">Raw Markdown documentation</a></li>
+      <li><a href="/.well-known/oauth-protected-resource">OAuth discovery metadata</a></li>
     </ul>
     <h2>Available tools</h2>
     <p><code>list_personas</code>, <code>list_voices</code>, <code>create_persona</code>, <code>update_persona</code>, <code>get_token_balance</code>, <code>generate_video_from_persona</code>, <code>get_video_status</code>, <code>list_social_accounts</code>, <code>schedule_video</code>, <code>list_schedules</code>, <code>cancel_schedule</code></p>

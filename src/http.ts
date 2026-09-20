@@ -6,6 +6,64 @@ import { PostEngineerClient } from './client.js';
 import { docsHtml, docsMarkdown, healthMarkdown } from './http-docs.js';
 
 const MCP_PATH = '/';
+const PROTECTED_RESOURCE_METADATA_PATH = '/.well-known/oauth-protected-resource';
+const DEFAULT_PUBLIC_URL = 'https://mcp.post-engineer.com';
+const DEFAULT_AUTHORIZATION_SERVERS = ['https://post-engineer.com'];
+
+function publicBaseUrl(): string {
+  const raw = (process.env.MCP_PUBLIC_URL ?? '').trim();
+  if (!raw) return DEFAULT_PUBLIC_URL;
+  return raw.replace(/\/+$/, '');
+}
+
+function authorizationServers(): string[] {
+  const raw = (process.env.MCP_AUTHORIZATION_SERVERS ?? '').trim();
+  if (!raw) return DEFAULT_AUTHORIZATION_SERVERS;
+  return raw
+    .split(',')
+    .map((entry) => entry.trim().replace(/\/+$/, ''))
+    .filter((entry) => entry.length > 0);
+}
+
+function protectedResourceMetadata(): Record<string, unknown> {
+  const base = publicBaseUrl();
+  return {
+    resource: base,
+    authorization_servers: authorizationServers(),
+    bearer_methods_supported: ['header'],
+    resource_documentation: `${base}/docs`,
+  };
+}
+
+function protectedResourceMetadataUrl(): string {
+  return `${publicBaseUrl()}${PROTECTED_RESOURCE_METADATA_PATH}`;
+}
+
+function unauthorizedChallenge(): string {
+  return (
+    'Bearer error="invalid_token", ' +
+    'error_description="Authentication required.", ' +
+    `resource_metadata="${protectedResourceMetadataUrl()}"`
+  );
+}
+
+function isOriginAllowed(request: IncomingMessage): boolean {
+  const origin = request.headers.origin;
+  if (!origin) return true;
+  let originHost: string;
+  try {
+    originHost = new URL(origin).host.toLowerCase();
+  } catch {
+    return false;
+  }
+  const host = (request.headers.host ?? '').toLowerCase();
+  if (host && originHost === host) return true;
+  const extra = (process.env.MCP_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry.length > 0);
+  return extra.includes(originHost);
+}
 
 function requiredEnvironmentVariable(name: string): string {
   const value = process.env[name];
@@ -123,14 +181,34 @@ export function createPostEngineerHttpServer(): Server {
       return;
     }
 
+    if (pathname === PROTECTED_RESOURCE_METADATA_PATH) {
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        writeJson(response, 405, { error: 'Only GET and HEAD are supported.' });
+        return;
+      }
+      const body = JSON.stringify(protectedResourceMetadata());
+      response.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+      });
+      if (request.method !== 'HEAD') response.end(body);
+      else response.end();
+      return;
+    }
+
     if (pathname !== MCP_PATH) {
       writeJson(response, 404, { error: 'Not found.' });
       return;
     }
 
+    if (!isOriginAllowed(request)) {
+      writeJson(response, 403, { error: 'Forbidden origin.' });
+      return;
+    }
+
     const postEngineerApiKey = getPostEngineerApiKey(request);
     if (!postEngineerApiKey) {
-      response.setHeader('WWW-Authenticate', 'Bearer');
+      response.setHeader('WWW-Authenticate', unauthorizedChallenge());
       writeJson(response, 401, { error: 'Authentication required.' });
       return;
     }
