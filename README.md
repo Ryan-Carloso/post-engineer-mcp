@@ -100,7 +100,7 @@ pnpm build
 pnpm start:http
 ```
 
-The endpoint is `https://mcp.post-engineer.com/`. Requests must include `Authorization: Bearer <USER_POST_ENGINEER_API_KEY>`. The key is read per request and is never stored by the MCP server. Keep the endpoint behind a provider that supports HTTPS. `/health` is available for deployment health checks.
+The endpoint is `https://mcp.post-engineer.com/`. ChatGPT clients should use OAuth discovery; clients without OAuth may send `Authorization: Bearer <USER_POST_ENGINEER_API_KEY>`. The credential is read per request and is never stored by the MCP server. Keep the endpoint behind a provider that supports HTTPS. `/health` is available for deployment health checks.
 
 Public service documentation is available at:
 
@@ -119,7 +119,7 @@ curl -i https://mcp.post-engineer.com/docs.md
 curl -i https://mcp.post-engineer.com/.well-known/oauth-protected-resource
 ```
 
-In ChatGPT, enable Developer mode under **Settings -> Security and login**, open **Apps/Plugins**, choose **Add**, enter `https://mcp.post-engineer.com/`, configure bearer authentication with the user's own API key, and install it. Then open a new chat and select the app with `@` or `+`.
+In ChatGPT, enable Developer mode under **Settings -> Security and login**, open **Apps/Plugins**, choose **Add**, enter `https://mcp.post-engineer.com/`, and complete the OAuth consent flow. Then open a new chat and select the app with `@` or `+`.
 
 Never put the user's API key in the URL. Revoke the key in Post Engineer if it is exposed.
 

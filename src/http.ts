@@ -110,10 +110,28 @@ function getPostEngineerApiKey(request: IncomingMessage): string | undefined {
   return apiKey.length > 0 ? apiKey : undefined;
 }
 
+function getJsonRpcMethod(body: unknown): string | undefined {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return undefined;
+  const method = (body as { method?: unknown }).method;
+  return typeof method === 'string' ? method : undefined;
+}
+
+async function readJsonBody(request: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) chunks.push(Buffer.from(chunk));
+  const body = Buffer.concat(chunks).toString('utf8');
+  try {
+    return JSON.parse(body) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
 async function handleMcpRequest(
   request: IncomingMessage,
   response: ServerResponse,
-  postEngineerApiKey: string,
+  postEngineerApiKey: string | undefined,
+  parsedBody?: unknown,
 ): Promise<void> {
   const server: McpServer = createPostEngineerMcpServer(
     new PostEngineerClient({ apiKey: postEngineerApiKey }),
@@ -130,7 +148,7 @@ async function handleMcpRequest(
 
   try {
     await server.connect(transport);
-    await transport.handleRequest(request, response);
+      await transport.handleRequest(request, response, parsedBody);
   } catch (error: unknown) {
     console.error('[mcp/http] request failed', error);
     if (!response.headersSent) {
@@ -206,19 +224,30 @@ export function createPostEngineerHttpServer(): Server {
       return;
     }
 
-    const postEngineerApiKey = getPostEngineerApiKey(request);
-    if (!postEngineerApiKey) {
-      response.setHeader('WWW-Authenticate', unauthorizedChallenge());
-      writeJson(response, 401, { error: 'Authentication required.' });
-      return;
-    }
-
     if (request.method !== 'POST') {
       writeJson(response, 405, { error: 'Only POST is supported at /.' });
       return;
     }
 
-    void handleMcpRequest(request, response, postEngineerApiKey);
+    const postEngineerApiKey = getPostEngineerApiKey(request);
+    if (postEngineerApiKey) {
+      void handleMcpRequest(request, response, postEngineerApiKey);
+      return;
+    }
+
+    void readJsonBody(request).then((parsedBody: unknown) => {
+      if (getJsonRpcMethod(parsedBody) !== 'initialize') {
+        response.setHeader('WWW-Authenticate', unauthorizedChallenge());
+        writeJson(response, 401, { error: 'Authentication required.' });
+        return;
+      }
+      response.setHeader('WWW-Authenticate', unauthorizedChallenge());
+      return handleMcpRequest(request, response, undefined, parsedBody);
+    }).catch((error: unknown) => {
+      console.error('[mcp/http] request authentication failed', error);
+      if (!response.headersSent) writeJson(response, 400, { error: 'Invalid MCP request.' });
+      else response.destroy();
+    });
   });
 }
 

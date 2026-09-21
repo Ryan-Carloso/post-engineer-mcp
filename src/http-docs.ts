@@ -15,13 +15,20 @@ The MCP endpoint accepts \`POST\` requests with the standard MCP Streamable HTTP
 
 ## Authentication
 
-Every MCP request must include the user's own Post Engineer API key:
+ChatGPT should use OAuth discovery. The authorization server issues a short-lived
+Bearer access token after the user signs in and consents:
+
+\`\`\`text
+OAuth: https://post-engineer.com/.well-known/oauth-authorization-server
+\`\`\`
+
+For clients without OAuth support, use the user's own Post Engineer API key:
 
 \`\`\`http
 Authorization: Bearer <USER_POST_ENGINEER_API_KEY>
 \`\`\`
 
-There is no global Post Engineer API key on this server. The key is read from each request and forwarded to Post Engineer for that request only.
+There is no global Post Engineer API key on this server. OAuth tokens and API keys are read from each request and forwarded to Post Engineer for that request only.
 
 Never put the API key in the URL, a query string, source code, or a public repository.
 
@@ -33,10 +40,10 @@ Create or revoke keys at [post-engineer.com/api-keys](https://post-engineer.com/
 2. Enable **Settings -> Security and login -> Developer mode**.
 3. Open **Apps** or **Plugins**, then choose **Add**.
 4. Enter \`${MCP_ENDPOINT}\` as the remote MCP URL.
-5. Configure the user's Post Engineer API key as Bearer authentication if the connection form supports it.
+5. Complete the OAuth consent flow when prompted.
 6. Install the app, open a new chat, and select it with \`@\` or \`+\`.
 
-If the ChatGPT connection form uses OAuth discovery, this server publishes RFC 9728 protected resource metadata at \`${MCP_ENDPOINT}.well-known/oauth-protected-resource\` pointing at \`https://post-engineer.com\` as the authorization server. The one-click OAuth login flow lands once the Post Engineer web app issues those tokens; until then, authenticate with the Bearer API key above. The MCP tools and endpoint remain compatible with other remote MCP clients.
+This server publishes RFC 9728 protected resource metadata at \`${MCP_ENDPOINT}.well-known/oauth-protected-resource\`, pointing at \`https://post-engineer.com\` as the authorization server. The MCP tools accept the resulting OAuth access token and remain compatible with API-key clients.
 
 ## Local clients
 
@@ -119,14 +126,14 @@ export const docsHtml: string = `<!doctype html>
     <div class="card">
       <strong>MCP endpoint</strong>
       <p><code>${MCP_ENDPOINT}</code></p>
-      <p>Use the user's API key as <code>Authorization: Bearer &lt;API_KEY&gt;</code>. There is no global server key.</p>
+      <p>Use OAuth for ChatGPT. Other clients may use the user's API key as <code>Authorization: Bearer &lt;API_KEY&gt;</code>. There is no global server key.</p>
     </div>
     <h2>ChatGPT</h2>
     <ol>
       <li>Enable Developer mode in ChatGPT under Settings, Security and login.</li>
       <li>Open Apps or Plugins and choose Add.</li>
       <li>Enter <code>${MCP_ENDPOINT}</code>.</li>
-      <li>Configure the user's API key as Bearer authentication if supported by the connection form.</li>
+      <li>Complete OAuth consent, or configure the user's API key if OAuth is unavailable.</li>
       <li>Install the app and select it in a new chat with <code>@</code> or <code>+</code>.</li>
     </ol>
     <h2>Validation</h2>
