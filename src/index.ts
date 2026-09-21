@@ -66,7 +66,7 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
 
   server.tool(
     'list_faces',
-    'List default/stock persona faces (avatar options). Pass a face url as avatarUrl when calling create_persona.',
+    'List default/stock persona faces (avatar options). Each face includes id, url, name, gender, age (single number, not a range), hair, and description in Portuguese so you can pick without seeing the photo. Pass a face url as avatarUrl when calling create_persona.',
     {},
     async () => {
       return handleListFaces(apiClient);

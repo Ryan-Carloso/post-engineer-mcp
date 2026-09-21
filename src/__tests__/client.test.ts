@@ -139,6 +139,10 @@ describe('PostEngineerClient', () => {
           id: 'file-1',
           url: 'https://post-engineer.com/caracter-samples/file-1.png',
           name: 'Character 1',
+          gender: 'female',
+          age: 23,
+          hair: 'loiro ondulado nos ombros',
+          description: 'Mulher jovem loira de olhos claros, sorrindo em selfie casual com top branco.',
         },
       ],
     };
