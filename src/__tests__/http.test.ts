@@ -88,6 +88,17 @@ describe('remote HTTP server', () => {
     });
     expect(mcp.status).toBe(200);
     expect(mcp.headers.get('www-authenticate')).toContain('resource_metadata=');
+
+    const tools = await fetch(`${baseUrl}/`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json, text/event-stream',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }),
+    });
+    expect(tools.status).toBe(401);
+    expect(tools.headers.get('www-authenticate')).toContain('resource_metadata=');
   });
 
   it('returns explicit responses for unsupported public methods and paths', async () => {

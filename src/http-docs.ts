@@ -126,14 +126,14 @@ export const docsHtml: string = `<!doctype html>
     <div class="card">
       <strong>MCP endpoint</strong>
       <p><code>${MCP_ENDPOINT}</code></p>
-      <p>Use the user's API key as <code>Authorization: Bearer &lt;API_KEY&gt;</code>. There is no global server key.</p>
+      <p>Use OAuth for ChatGPT. Other clients may use the user's API key as <code>Authorization: Bearer &lt;API_KEY&gt;</code>. There is no global server key.</p>
     </div>
     <h2>ChatGPT</h2>
     <ol>
       <li>Enable Developer mode in ChatGPT under Settings, Security and login.</li>
       <li>Open Apps or Plugins and choose Add.</li>
       <li>Enter <code>${MCP_ENDPOINT}</code>.</li>
-      <li>Configure the user's API key as Bearer authentication if supported by the connection form.</li>
+      <li>Complete OAuth consent, or configure the user's API key if OAuth is unavailable.</li>
       <li>Install the app and select it in a new chat with <code>@</code> or <code>+</code>.</li>
     </ol>
     <h2>Validation</h2>
