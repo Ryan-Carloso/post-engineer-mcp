@@ -68,6 +68,24 @@ describe('MCP Tool Handlers', () => {
     expect(response.content[0].text).toContain('task-789');
   });
 
+  it('handleGenerateVideo passes audioUrl through to the client', async () => {
+    vi.mocked(mockClient.generateVideoJob).mockResolvedValue({
+      success: true,
+      taskId: 'task-audio-2',
+    });
+
+    const response = await handleGenerateVideo(mockClient, {
+      personaId: 'persona-123',
+      audioUrl: 'https://cdn.example.com/narracao.mp3',
+    });
+
+    expect(mockClient.generateVideoJob).toHaveBeenCalledWith({
+      personaId: 'persona-123',
+      audioUrl: 'https://cdn.example.com/narracao.mp3',
+    });
+    expect(response.content[0].text).toContain('task-audio-2');
+  });
+
   it('handleListVoices returns the voice catalog', async () => {
     vi.mocked(mockClient.listVoices).mockResolvedValue({
       voices: [{ id: 'calm' }, { id: 'energetic' }],

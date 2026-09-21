@@ -131,7 +131,7 @@ Never put the user's API key in the URL. Revoke the key in Post Engineer if it i
 - `create_persona`: create an AI persona (avatar, voice, language, niche).
 - `update_persona`: update an existing persona (only the provided fields change).
 - `get_token_balance`: get the prepaid token wallet balance. Check before generating videos, which cost tokens.
-- `generate_video_from_persona`: generate a video with a persona.
+- `generate_video_from_persona`: generate a video with a persona. Optional `scriptPrompt` overrides the video script; optional `audioUrl` (public http(s) URL) supplies custom audio for this video, overriding the persona voice.
 - `get_video_status`: check generation status and get the final video URL.
 - `list_social_accounts`: list connected social accounts with the account IDs needed for scheduling.
 - `schedule_video`: schedule automated posting (must be at least 24h in advance; each provider needs an account ID from `list_social_accounts`).
