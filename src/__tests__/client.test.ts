@@ -141,8 +141,9 @@ describe('PostEngineerClient', () => {
           name: 'Character 1',
           gender: 'female',
           age: 23,
-          hair: 'loiro ondulado nos ombros',
-          description: 'Mulher jovem loira de olhos claros, sorrindo em selfie casual com top branco.',
+          ethnicity: 'White',
+          hair: 'shoulder-length wavy blonde',
+          description: 'Young blonde woman with light eyes, smiling in a casual selfie wearing a white tank top.',
         },
       ],
     };

@@ -67,7 +67,7 @@ For OpenCode, Claude Desktop, Cursor, and other local clients using stdio:
 
 - \`list_personas\`
 - \`list_voices\`
-- \`list_faces\` — stock faces with gender, age (number), hair, description (PT); use `url` as avatarUrl
+- \`list_faces\` — stock faces with gender, age (number), ethnicity, hair, description (EN); use `url` as avatarUrl
 - \`create_persona\`
 - \`update_persona\`
 - \`get_token_balance\`

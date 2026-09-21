@@ -82,7 +82,7 @@ describe('MCP Tool Handlers', () => {
 
   it('handleListFaces returns the face catalog', async () => {
     vi.mocked(mockClient.listFaces).mockResolvedValue({
-      faces: [{ id: 'file-1', url: 'https://post-engineer.com/caracter-samples/file-1.png', name: 'Character 1', gender: 'female', age: 23, hair: 'loiro ondulado nos ombros', description: 'Mulher jovem loira de olhos claros.' }],
+      faces: [{ id: 'file-1', url: 'https://post-engineer.com/caracter-samples/file-1.png', name: 'Character 1', gender: 'female', age: 23, ethnicity: 'White', hair: 'shoulder-length wavy blonde', description: 'Young blonde woman with light eyes.' }],
     });
 
     const response = await handleListFaces(mockClient);
