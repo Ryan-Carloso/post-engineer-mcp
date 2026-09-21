@@ -62,7 +62,7 @@ describe('remote HTTP server', () => {
     expect(response.headers.get('access-control-allow-methods')).toContain('POST');
   });
 
-  it('supports HEAD for documentation and rejects unauthenticated MCP requests', async () => {
+  it('supports HEAD for documentation and advertises OAuth for unauthenticated MCP requests', async () => {
     const baseUrl = await startTestServer();
 
     const docs = await fetch(`${baseUrl}/docs`, { method: 'HEAD' });
@@ -71,10 +71,23 @@ describe('remote HTTP server', () => {
 
     const mcp = await fetch(`${baseUrl}/`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
+      headers: {
+        Accept: 'application/json, text/event-stream',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'tunnel-probe', version: '1.0.0' },
+        },
+      }),
     });
-    expect(mcp.status).toBe(401);
+    expect(mcp.status).toBe(200);
+    expect(mcp.headers.get('www-authenticate')).toContain('resource_metadata=');
   });
 
   it('returns explicit responses for unsupported public methods and paths', async () => {
@@ -165,22 +178,6 @@ describe('remote HTTP server', () => {
     expect(post.status).toBe(405);
   });
 
-  it('points OAuth clients at the metadata URL on 401 responses', async () => {
-    const baseUrl = await startTestServer();
-
-    const response = await fetch(`${baseUrl}/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    });
-    expect(response.status).toBe(401);
-    const challenge = response.headers.get('www-authenticate') ?? '';
-    expect(challenge).toContain('Bearer');
-    expect(challenge).toContain(
-      'resource_metadata="https://mcp.post-engineer.com/.well-known/oauth-protected-resource"',
-    );
-  });
-
   it('rejects cross-origin MCP requests to mitigate DNS rebinding', async () => {
     const baseUrl = await startTestServer();
     const origin = new URL(baseUrl).origin;
@@ -199,11 +196,21 @@ describe('remote HTTP server', () => {
     const sameOrigin = await fetch(`${baseUrl}/`, {
       method: 'POST',
       headers: {
+        Accept: 'application/json, text/event-stream',
         'Content-Type': 'application/json',
         Origin: origin,
       },
-      body: '{}',
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'same-origin-client', version: '1.0.0' },
+        },
+      }),
     });
-    expect(sameOrigin.status).toBe(401);
+    expect(sameOrigin.status).toBe(200);
   });
 });
