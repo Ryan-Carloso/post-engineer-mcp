@@ -85,6 +85,14 @@ Configure this server environment variable:
 MCP_PORT="3000"
 ```
 
+Optional OAuth-discovery overrides (defaults shown):
+
+```bash
+MCP_PUBLIC_URL="https://mcp.post-engineer.com"
+MCP_AUTHORIZATION_SERVERS="https://post-engineer.com"
+MCP_ALLOWED_ORIGINS=""
+```
+
 Start the remote server:
 
 ```bash
@@ -108,6 +116,7 @@ curl -i https://mcp.post-engineer.com/health
 curl -i https://mcp.post-engineer.com/health.md
 curl -i https://mcp.post-engineer.com/docs
 curl -i https://mcp.post-engineer.com/docs.md
+curl -i https://mcp.post-engineer.com/.well-known/oauth-protected-resource
 ```
 
 In ChatGPT, enable Developer mode under **Settings -> Security and login**, open **Apps/Plugins**, choose **Add**, enter `https://mcp.post-engineer.com/`, configure bearer authentication with the user's own API key, and install it. Then open a new chat and select the app with `@` or `+`.
