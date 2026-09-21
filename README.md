@@ -38,6 +38,29 @@ Configure your agent (`opencode.json`, `claude_desktop_config.json`, `.mcp.json`
 
 Replace `<MY_API_KEY>` with the key you generated on https://post-engineer.com/api-keys. No repository clone or local build is required.
 
+### OpenCode
+
+OpenCode uses `mcp` instead of `mcpServers`. Its local MCP tool-discovery timeout defaults to 5 seconds, which can be too short while `npx` downloads the package on the first launch. Set a longer timeout:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "post-engineer": {
+      "type": "local",
+      "command": ["npx", "-y", "post-engineer-mcp"],
+      "environment": {
+        "POST_ENGINEER_API_KEY": "<MY_API_KEY>"
+      },
+      "timeout": 30000,
+      "enabled": true
+    }
+  }
+}
+```
+
+If the server was already configured, add only `"timeout": 30000` to its existing entry and restart OpenCode.
+
 ## Local development
 
 ```bash
