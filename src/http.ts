@@ -9,7 +9,6 @@ const MCP_PATH = '/';
 const PROTECTED_RESOURCE_METADATA_PATH = '/.well-known/oauth-protected-resource';
 const DEFAULT_PUBLIC_URL = 'https://mcp.post-engineer.com';
 const DEFAULT_AUTHORIZATION_SERVERS = ['https://post-engineer.com'];
-const LOCAL_WEB_APP_URL = (process.env.LOCAL_WEB_APP_URL ?? 'http://localhost:3434').replace(/\/+$/, '');
 
 function publicBaseUrl(): string {
   const raw = (process.env.MCP_PUBLIC_URL ?? '').trim();
@@ -101,36 +100,6 @@ function setCorsHeaders(response: ServerResponse): void {
   response.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   response.setHeader('Access-Control-Allow-Origin', '*');
   response.setHeader('Access-Control-Expose-Headers', 'MCP-Session-Id');
-}
-
-async function proxyToWebApp(request: IncomingMessage, response: ServerResponse): Promise<void> {
-  const headers = new Headers();
-  for (const [name, value] of Object.entries(request.headers)) {
-    if (name === 'host' || name === 'content-length' || value === undefined) continue;
-    headers.set(name, Array.isArray(value) ? value.join(', ') : value);
-  }
-
-  const chunks: Uint8Array[] = [];
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
-    for await (const chunk of request) chunks.push(chunk);
-  }
-
-  const upstream = await fetch(`${LOCAL_WEB_APP_URL}${request.url ?? '/'}`, {
-    method: request.method,
-    headers,
-    body: chunks.length > 0 ? Buffer.concat(chunks) : undefined,
-    redirect: 'manual',
-  });
-
-  response.statusCode = upstream.status;
-  upstream.headers.forEach((value, name) => {
-    if (name !== 'content-length' && name !== 'content-encoding') response.setHeader(name, value);
-  });
-  if (request.method === 'HEAD' || upstream.status === 204) {
-    response.end();
-    return;
-  }
-  response.end(Buffer.from(await upstream.arrayBuffer()));
 }
 
 function getPostEngineerApiKey(request: IncomingMessage): string | undefined {
@@ -234,15 +203,6 @@ export function createPostEngineerHttpServer(): Server {
 
     if (!isOriginAllowed(request)) {
       writeJson(response, 403, { error: 'Forbidden origin.' });
-      return;
-    }
-
-    if (pathname !== MCP_PATH) {
-      void proxyToWebApp(request, response).catch((error: unknown) => {
-        console.error('[mcp/http] local web proxy failed', error);
-        if (!response.headersSent) writeJson(response, 502, { error: 'Local web app unavailable.' });
-        else response.destroy();
-      });
       return;
     }
 
