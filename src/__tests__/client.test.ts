@@ -131,6 +131,47 @@ describe('PostEngineerClient', () => {
     await expect(client.listVoices()).rejects.toThrow(/Failed to list voices: 502/);
   });
 
+
+  it('lists faces successfully', async () => {
+    const mockFaces = {
+      faces: [
+        {
+          id: 'file-1',
+          url: 'https://post-engineer.com/caracter-samples/file-1.png',
+          name: 'Character 1',
+        },
+      ],
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockFaces,
+    });
+
+    const result = await client.listFaces();
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${baseUrl}/api/persona/faces`,
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${apiKey}`,
+        }),
+      })
+    );
+    expect(result).toEqual(mockFaces);
+  });
+
+  it('throws when listing faces fails', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      text: async () => 'Faces unavailable.',
+    });
+
+    await expect(client.listFaces()).rejects.toThrow(/Failed to list faces: 502/);
+  });
+
   it('updates persona with only provided fields as multipart', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,

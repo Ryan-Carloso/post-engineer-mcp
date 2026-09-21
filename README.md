@@ -127,6 +127,7 @@ Never put the user's API key in the URL. Revoke the key in Post Engineer if it i
 
 - `list_personas`: list existing personas.
 - `list_voices`: list available persona voices (live catalog from the platform, not hardcoded).
+- `list_faces`: list default/stock persona faces (live catalog from `/api/persona/faces`; pass a face `url` as `avatarUrl` on `create_persona`).
 - `create_persona`: create an AI persona (avatar, voice, language, niche).
 - `update_persona`: update an existing persona (only the provided fields change).
 - `get_token_balance`: get the prepaid token wallet balance. Check before generating videos, which cost tokens.

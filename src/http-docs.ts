@@ -67,6 +67,7 @@ For OpenCode, Claude Desktop, Cursor, and other local clients using stdio:
 
 - \`list_personas\`
 - \`list_voices\`
+- \`list_faces\`
 - \`create_persona\`
 - \`update_persona\`
 - \`get_token_balance\`
@@ -144,6 +145,6 @@ export const docsHtml: string = `<!doctype html>
       <li><a href="/.well-known/oauth-protected-resource">OAuth discovery metadata</a></li>
     </ul>
     <h2>Available tools</h2>
-    <p><code>list_personas</code>, <code>list_voices</code>, <code>create_persona</code>, <code>update_persona</code>, <code>get_token_balance</code>, <code>generate_video_from_persona</code>, <code>get_video_status</code>, <code>list_social_accounts</code>, <code>schedule_video</code>, <code>list_schedules</code>, <code>cancel_schedule</code></p>
+    <p><code>list_personas</code>, <code>list_voices</code>, <code>list_faces</code>, <code>create_persona</code>, <code>update_persona</code>, <code>get_token_balance</code>, <code>generate_video_from_persona</code>, <code>get_video_status</code>, <code>list_social_accounts</code>, <code>schedule_video</code>, <code>list_schedules</code>, <code>cancel_schedule</code></p>
   </body>
 </html>`;

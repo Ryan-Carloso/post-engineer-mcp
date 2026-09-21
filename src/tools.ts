@@ -21,6 +21,8 @@ export const ListPersonasSchema = z.object({});
 
 export const ListVoicesSchema = z.object({});
 
+export const ListFacesSchema = z.object({});
+
 export const UpdatePersonaSchema = z.object({
   personaId: z.string().min(1, 'personaId is required'),
   name: z.string().min(1).optional(),
@@ -138,6 +140,33 @@ export async function handleListVoices(
         {
           type: 'text',
           text: `Error listing voices: ${(error as Error).message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+
+export async function handleListFaces(
+  client: PostEngineerClient
+): Promise<McpToolResponse> {
+  try {
+    const result = await client.listFaces();
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error listing faces: ${(error as Error).message}`,
         },
       ],
       isError: true,
