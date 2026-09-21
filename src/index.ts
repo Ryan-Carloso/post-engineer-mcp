@@ -7,6 +7,7 @@ import {
   handleCreatePersona,
   handleListPersonas,
   handleListVoices,
+  handleListFaces,
   handleUpdatePersona,
   handleListSocialAccounts,
   handleListSchedules,
@@ -30,7 +31,7 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
     'Create a new AI persona with avatar, voice, language, and niche prompt.',
     {
       name: z.string().min(1, 'Name is required').describe('Name of the persona'),
-      avatarUrl: z.string().url().optional().nullable().describe('Public URL to the persona avatar image'),
+      avatarUrl: z.string().url().optional().nullable().describe('Public URL to the persona avatar image (use list_faces for stock face URLs)'),
       voiceId: z.string().default('alloy').describe('Voice ID to use (e.g. alloy, echo)'),
       language: z.string().default('en-US').describe('Language code (e.g. pt-BR, en-US)'),
       videoAspect: z.enum(['9:16', '16:9']).default('9:16').describe('Video aspect ratio'),
@@ -60,6 +61,15 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
     {},
     async () => {
       return handleListVoices(apiClient);
+    }
+  );
+
+  server.tool(
+    'list_faces',
+    'List default/stock persona faces (avatar options). Each face includes id, url, name, gender, age (single number, not a range), ethnicity, hair, and description in English so you can pick without seeing the photo. Pass a face url as avatarUrl when calling create_persona.',
+    {},
+    async () => {
+      return handleListFaces(apiClient);
     }
   );
 

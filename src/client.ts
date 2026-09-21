@@ -130,6 +130,21 @@ export class PostEngineerClient {
     return response.json();
   }
 
+  async listFaces(): Promise<unknown> {
+    const url = `${this.baseUrl}/api/persona/faces`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to list faces: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
+
   async updatePersona(input: UpdatePersonaInput): Promise<unknown> {
     const url = `${this.baseUrl}/api/persona?personaId=${encodeURIComponent(input.personaId)}`;
     const formData = new FormData();

@@ -3,6 +3,7 @@ import {
   handleCreatePersona,
   handleGenerateVideo,
   handleListVoices,
+  handleListFaces,
   handleUpdatePersona,
   handleListSocialAccounts,
   handleListSchedules,
@@ -18,6 +19,7 @@ describe('MCP Tool Handlers', () => {
     listPersonas: vi.fn(),
     generateVideoJob: vi.fn(),
     listVoices: vi.fn(),
+    listFaces: vi.fn(),
     updatePersona: vi.fn(),
     listSocialAccounts: vi.fn(),
     listSchedules: vi.fn(),
@@ -75,6 +77,18 @@ describe('MCP Tool Handlers', () => {
 
     expect(mockClient.listVoices).toHaveBeenCalledOnce();
     expect(response.content[0].text).toContain('calm');
+  });
+
+
+  it('handleListFaces returns the face catalog', async () => {
+    vi.mocked(mockClient.listFaces).mockResolvedValue({
+      faces: [{ id: 'file-1', url: 'https://post-engineer.com/caracter-samples/file-1.png', name: 'Character 1', gender: 'female', age: 23, ethnicity: 'White', hair: 'shoulder-length wavy blonde', description: 'Young blonde woman with light eyes.' }],
+    });
+
+    const response = await handleListFaces(mockClient);
+
+    expect(mockClient.listFaces).toHaveBeenCalledOnce();
+    expect(response.content[0].text).toContain('file-1');
   });
 
   it('handleUpdatePersona updates only provided fields', async () => {
