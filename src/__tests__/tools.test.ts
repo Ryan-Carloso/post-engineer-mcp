@@ -10,6 +10,7 @@ import {
   handleCancelSchedule,
   handleGetTokenBalance,
   handleScheduleVideo,
+  handleConnectAccount,
 } from '../tools.js';
 import type { PostEngineerClient } from '../client.js';
 
@@ -27,6 +28,8 @@ describe('MCP Tool Handlers', () => {
     getTokenBalance: vi.fn(),
     getVideoStatus: vi.fn(),
     createSchedule: vi.fn(),
+    getOAuthConnectUrl: vi.fn(),
+    connectBlueskyAccount: vi.fn(),
   } as unknown as PostEngineerClient;
 
   it('handleCreatePersona calls client and returns text response', async () => {
@@ -173,5 +176,82 @@ describe('MCP Tool Handlers', () => {
 
     expect(response.isError).toBe(true);
     expect(response.content[0].text).toMatch(/at least 24 hours/i);
+  });
+
+  it('handleConnectAccount returns the OAuth authorization URL with instructions', async () => {
+    vi.mocked(mockClient.getOAuthConnectUrl).mockResolvedValue({
+      success: true,
+      auth_url: 'https://www.instagram.com/oauth/authorize?state=abc',
+    });
+
+    const response = await handleConnectAccount(mockClient, { provider: 'instagram' });
+
+    expect(mockClient.getOAuthConnectUrl).toHaveBeenCalledWith('instagram');
+    expect(response.isError).toBeUndefined();
+    const text = (response.content[0] as { text: string }).text;
+    expect(text).toContain('https://www.instagram.com/oauth/authorize?state=abc');
+    expect(text).toMatch(/open/i);
+    expect(text).toMatch(/authorize/i);
+    expect(text).toContain('list_social_accounts');
+  });
+
+  it('handleConnectAccount returns an error when the connect-url request fails', async () => {
+    vi.mocked(mockClient.getOAuthConnectUrl).mockRejectedValue(
+      new Error('Failed to get OAuth connect URL: 401 Authentication required.')
+    );
+
+    const response = await handleConnectAccount(mockClient, { provider: 'youtube' });
+
+    expect(response.isError).toBe(true);
+    expect((response.content[0] as { text: string }).text).toMatch(/Failed to get OAuth connect URL/);
+  });
+
+  it('handleConnectAccount connects Bluesky directly without echoing the app password', async () => {
+    vi.mocked(mockClient.connectBlueskyAccount).mockResolvedValue({
+      success: true,
+      accountId: 'acc-1',
+      did: 'did:plc:xyz',
+    });
+
+    const response = await handleConnectAccount(mockClient, {
+      provider: 'bluesky',
+      handle: 'user.bsky.social',
+      appPassword: 'super-secret-password',
+    });
+
+    expect(mockClient.connectBlueskyAccount).toHaveBeenCalledWith(
+      'user.bsky.social',
+      'super-secret-password'
+    );
+    expect(response.isError).toBeUndefined();
+    const text = (response.content[0] as { text: string }).text;
+    expect(text).toMatch(/connected/i);
+    expect(text).not.toContain('super-secret-password');
+  });
+
+  it('handleConnectAccount requires handle and appPassword for Bluesky', async () => {
+    vi.clearAllMocks();
+    const response = await handleConnectAccount(mockClient, { provider: 'bluesky' });
+
+    expect(response.isError).toBe(true);
+    expect((response.content[0] as { text: string }).text).toMatch(/handle.*appPassword|appPassword.*handle/i);
+    expect(mockClient.connectBlueskyAccount).not.toHaveBeenCalled();
+  });
+
+  it('handleConnectAccount never leaks the app password on Bluesky errors', async () => {
+    vi.mocked(mockClient.connectBlueskyAccount).mockRejectedValue(
+      new Error('Failed to connect Bluesky account: 400 Invalid handle or app password.')
+    );
+
+    const response = await handleConnectAccount(mockClient, {
+      provider: 'bluesky',
+      handle: 'user.bsky.social',
+      appPassword: 'super-secret-password',
+    });
+
+    expect(response.isError).toBe(true);
+    const text = (response.content[0] as { text: string }).text;
+    expect(text).toMatch(/Invalid handle or app password/);
+    expect(text).not.toContain('super-secret-password');
   });
 });

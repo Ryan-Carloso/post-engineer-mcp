@@ -74,6 +74,7 @@ For OpenCode, Claude Desktop, Cursor, and other local clients using stdio:
 - \`generate_video_from_persona\`
 - \`get_video_status\`
 - \`list_social_accounts\`
+- \`connect_account\` — connect a social account (OAuth URL for youtube/instagram/linkedin; direct connect for bluesky with handle + appPassword)
 - \`schedule_video\`
 - \`list_schedules\`
 - \`cancel_schedule\`
@@ -145,6 +146,6 @@ export const docsHtml: string = `<!doctype html>
       <li><a href="/.well-known/oauth-protected-resource">OAuth discovery metadata</a></li>
     </ul>
     <h2>Available tools</h2>
-    <p><code>list_personas</code>, <code>list_voices</code>, <code>list_faces</code>, <code>create_persona</code>, <code>update_persona</code>, <code>get_token_balance</code>, <code>generate_video_from_persona</code>, <code>get_video_status</code>, <code>list_social_accounts</code>, <code>schedule_video</code>, <code>list_schedules</code>, <code>cancel_schedule</code></p>
+    <p><code>list_personas</code>, <code>list_voices</code>, <code>list_faces</code>, <code>create_persona</code>, <code>update_persona</code>, <code>get_token_balance</code>, <code>generate_video_from_persona</code>, <code>get_video_status</code>, <code>list_social_accounts</code>, <code>connect_account</code>, <code>schedule_video</code>, <code>list_schedules</code>, <code>cancel_schedule</code></p>
   </body>
 </html>`;

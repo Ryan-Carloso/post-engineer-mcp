@@ -37,6 +37,12 @@ export const UpdatePersonaSchema = z.object({
 
 export const ListSocialAccountsSchema = z.object({});
 
+export const ConnectAccountSchema = z.object({
+  provider: z.enum(['youtube', 'instagram', 'linkedin', 'bluesky']),
+  handle: z.string().min(1).optional(),
+  appPassword: z.string().min(1).optional(),
+});
+
 export const ListSchedulesSchema = z.object({});
 
 export const CancelScheduleSchema = z.object({
@@ -220,6 +226,71 @@ export async function handleListSocialAccounts(
         {
           type: 'text',
           text: `Error listing social accounts: ${(error as Error).message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+export async function handleConnectAccount(
+  client: PostEngineerClient,
+  args: z.infer<typeof ConnectAccountSchema>
+): Promise<McpToolResponse> {
+  if (args.provider === 'bluesky') {
+    if (!args.handle || !args.appPassword) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: 'Error: Bluesky requires both handle and appPassword.',
+          },
+        ],
+        isError: true,
+      };
+    }
+    try {
+      const result = await client.connectBlueskyAccount(args.handle, args.appPassword);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Bluesky account connected successfully: ${JSON.stringify(result, null, 2)}`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error connecting Bluesky account: ${(error as Error).message}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  try {
+    const result = (await client.getOAuthConnectUrl(args.provider)) as { auth_url?: string };
+    return {
+      content: [
+        {
+          type: 'text',
+          text:
+            `To connect your ${args.provider} account, open this URL in your browser and authorize Post Engineer:\n\n` +
+            `${result.auth_url}\n\n` +
+            `Once you authorize, the account is connected automatically. Verify with list_social_accounts.`,
+        },
+      ],
+    };
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error getting OAuth connect URL: ${(error as Error).message}`,
         },
       ],
       isError: true,
