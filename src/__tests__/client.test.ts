@@ -417,4 +417,79 @@ describe('PostEngineerClient', () => {
     );
     expect(result).toEqual(mockSchedule);
   });
+
+  it('gets the OAuth connect URL for a provider', async () => {
+    const mockResponse = {
+      success: true,
+      auth_url: 'https://www.instagram.com/oauth/authorize?state=abc',
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockResponse,
+    });
+
+    const result = await client.getOAuthConnectUrl('instagram');
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${baseUrl}/api/account/connect-url`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({ provider: 'instagram' }),
+      })
+    );
+    expect(result).toEqual(mockResponse);
+  });
+
+  it('throws a clear error when the connect-url request fails', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () => 'Authentication required.',
+    });
+
+    await expect(client.getOAuthConnectUrl('youtube')).rejects.toThrow(
+      /Failed to get OAuth connect URL: 401/
+    );
+  });
+
+  it('connects a Bluesky account with handle + app password', async () => {
+    const mockResponse = { success: true, accountId: 'acc-1', did: 'did:plc:xyz' };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockResponse,
+    });
+
+    const result = await client.connectBlueskyAccount('user.bsky.social', 'app-password-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${baseUrl}/api/bluesky-connect`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({ handle: 'user.bsky.social', appPassword: 'app-password-123' }),
+      })
+    );
+    expect(result).toEqual(mockResponse);
+  });
+
+  it('throws a clear error when the Bluesky connect request fails', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      text: async () => 'Invalid handle or app password.',
+    });
+
+    await expect(
+      client.connectBlueskyAccount('user.bsky.social', 'wrong')
+    ).rejects.toThrow(/Failed to connect Bluesky account: 400/);
+  });
 });

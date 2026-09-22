@@ -186,6 +186,38 @@ export class PostEngineerClient {
     return response.json();
   }
 
+  async getOAuthConnectUrl(provider: string): Promise<unknown> {
+    const url = `${this.baseUrl}/api/account/connect-url`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ provider }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to get OAuth connect URL: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
+
+  async connectBlueskyAccount(handle: string, appPassword: string): Promise<unknown> {
+    const url = `${this.baseUrl}/api/bluesky-connect`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ handle, appPassword }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to connect Bluesky account: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
+
   async listSchedules(): Promise<unknown> {
     const url = `${this.baseUrl}/api/schedule`;
     const response = await fetch(url, {
