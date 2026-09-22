@@ -319,6 +319,36 @@ describe('PostEngineerClient', () => {
     expect(result).toEqual(mockJob);
   });
 
+  it('sends custom audio_url in the video job payload', async () => {
+    const mockJob = {
+      success: true,
+      taskId: 'task-audio-1',
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockJob,
+    });
+
+    const result = await client.generateVideoJob({
+      personaId: 'persona-123',
+      audioUrl: 'https://cdn.example.com/narracao.mp3',
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${baseUrl}/api/persona/video-job`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          personaId: 'persona-123',
+          audio_url: 'https://cdn.example.com/narracao.mp3',
+        }),
+      })
+    );
+    expect(result).toEqual(mockJob);
+  });
+
   it('retrieves video task status', async () => {
     const mockStatus = {
       success: true,

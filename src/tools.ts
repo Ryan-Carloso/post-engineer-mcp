@@ -54,6 +54,7 @@ export const GetTokenBalanceSchema = z.object({});
 export const GenerateVideoSchema = z.object({
   personaId: z.string().min(1, 'personaId is required'),
   scriptPrompt: z.string().optional(),
+  audioUrl: z.string().url('audioUrl must be a valid URL').optional().describe('Public URL of custom audio for this video (overrides the persona voice)'),
 });
 
 export const GetVideoStatusSchema = z.object({

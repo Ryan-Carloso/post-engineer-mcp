@@ -146,10 +146,11 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
 
   server.tool(
     'generate_video_from_persona',
-    'Trigger video generation using an existing persona.',
+    'Trigger video generation using an existing persona. Optional scriptPrompt overrides the video script; optional audioUrl (public http(s) URL) supplies custom audio for this video, overriding the persona voice.',
     {
       personaId: z.string().min(1, 'personaId is required').describe('The ID of the persona to generate video with'),
       scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
+      audioUrl: z.string().url('audioUrl must be a valid URL').optional().describe('Optional public URL of custom audio for this video (overrides the persona voice)'),
     },
     async (args) => {
       return handleGenerateVideo(apiClient, args);
