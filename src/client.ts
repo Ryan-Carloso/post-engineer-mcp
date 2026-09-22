@@ -20,6 +20,7 @@ export interface CreatePersonaInput {
 export interface GenerateVideoJobInput {
   personaId: string;
   scriptPrompt?: string;
+  audioUrl?: string;
 }
 
 export interface UpdatePersonaInput {
@@ -238,6 +239,7 @@ export class PostEngineerClient {
       body: JSON.stringify({
         personaId: input.personaId,
         video_script_prompt: input.scriptPrompt,
+        audio_url: input.audioUrl,
       }),
     });
 
