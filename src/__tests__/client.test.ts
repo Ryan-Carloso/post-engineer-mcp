@@ -258,6 +258,56 @@ describe('PostEngineerClient', () => {
     expect(result).toEqual(mockSchedules);
   });
 
+  it('lists posts with the default limit', async () => {
+    const mockPosts = {
+      success: true,
+      upcoming: [{ id: 'up-1', slot_at: '2026-09-24T10:00:00Z', status: 'pending' }],
+      recent: [{ id: 're-1', slot_at: '2026-09-20T10:00:00Z', status: 'published' }],
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockPosts,
+    });
+
+    const result = await client.listPosts();
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${baseUrl}/api/schedule/status?limit=20`,
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${apiKey}`,
+        }),
+      })
+    );
+    expect(result).toEqual(mockPosts);
+  });
+
+  it('lists posts with a custom limit', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, upcoming: [], recent: [] }),
+    });
+
+    await client.listPosts(50);
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${baseUrl}/api/schedule/status?limit=50`,
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+
+  it('throws a clear error when listing posts fails', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () => 'Unauthorized',
+    });
+
+    await expect(client.listPosts()).rejects.toThrow('Failed to list posts: 401 Unauthorized');
+  });
+
   it('cancels a schedule by id', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,

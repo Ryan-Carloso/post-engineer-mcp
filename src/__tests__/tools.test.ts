@@ -7,10 +7,12 @@ import {
   handleUpdatePersona,
   handleListSocialAccounts,
   handleListSchedules,
+  handleListPosts,
   handleCancelSchedule,
   handleGetTokenBalance,
   handleScheduleVideo,
   handleConnectAccount,
+  ListPostsSchema,
 } from '../tools.js';
 import type { PostEngineerClient } from '../client.js';
 
@@ -24,6 +26,7 @@ describe('MCP Tool Handlers', () => {
     updatePersona: vi.fn(),
     listSocialAccounts: vi.fn(),
     listSchedules: vi.fn(),
+    listPosts: vi.fn(),
     cancelSchedule: vi.fn(),
     getTokenBalance: vi.fn(),
     getVideoStatus: vi.fn(),
@@ -160,6 +163,38 @@ describe('MCP Tool Handlers', () => {
 
     expect(mockClient.listSchedules).toHaveBeenCalledOnce();
     expect(response.content[0].text).toContain('sched-1');
+  });
+
+  it('ListPostsSchema defaults limit to 20 and caps it at 500', () => {
+    expect(ListPostsSchema.parse({}).limit).toBe(20);
+    expect(ListPostsSchema.parse({ limit: 500 }).limit).toBe(500);
+    expect(() => ListPostsSchema.parse({ limit: 0 })).toThrow();
+    expect(() => ListPostsSchema.parse({ limit: 501 })).toThrow();
+    expect(() => ListPostsSchema.parse({ limit: 1.5 })).toThrow();
+  });
+
+  it('handleListPosts returns upcoming and past posts', async () => {
+    vi.mocked(mockClient.listPosts).mockResolvedValue({
+      success: true,
+      upcoming: [{ id: 'up-1', status: 'pending' }],
+      recent: [{ id: 're-1', status: 'published' }],
+    });
+
+    const response = await handleListPosts(mockClient, { limit: 20 });
+
+    expect(mockClient.listPosts).toHaveBeenCalledWith(20);
+    expect(response.content[0].text).toContain('up-1');
+    expect(response.content[0].text).toContain('re-1');
+    expect(response.isError).toBeUndefined();
+  });
+
+  it('handleListPosts returns an error result when the client fails', async () => {
+    vi.mocked(mockClient.listPosts).mockRejectedValue(new Error('boom'));
+
+    const response = await handleListPosts(mockClient, { limit: 20 });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toContain('Error listing posts: boom');
   });
 
   it('handleCancelSchedule cancels by id', async () => {

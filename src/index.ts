@@ -12,6 +12,7 @@ import {
   handleListSocialAccounts,
   handleConnectAccount,
   handleListSchedules,
+  handleListPosts,
   handleCancelSchedule,
   handleGetTokenBalance,
   handleGenerateVideo,
@@ -121,6 +122,17 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
     {},
     async () => {
       return handleListSchedules(apiClient);
+    }
+  );
+
+  server.tool(
+    'list_posts',
+    'List upcoming (scheduled) and past (published/failed) posts across all connected accounts. Returns two lists: upcoming slots (id, slot_at, status, topic, schedule_id) and recent results (id, slot_at, status, topic, error, published_at, schedule_id). Use when the user asks about their posts — what is coming next, what already went out, or why a post failed. Combine with list_schedules or list_social_accounts when persona/account names are needed.',
+    {
+      limit: z.number().int().min(1).max(500).default(20).describe('Max number of upcoming and past posts to return (each list). Default 20, max 500.'),
+    },
+    async (args) => {
+      return handleListPosts(apiClient, args);
     }
   );
 
