@@ -11,6 +11,7 @@ import {
   handleGetTokenBalance,
   handleScheduleVideo,
   handleConnectAccount,
+  GenerateVideoSchema,
 } from '../tools.js';
 import type { PostEngineerClient } from '../client.js';
 
@@ -87,6 +88,20 @@ describe('MCP Tool Handlers', () => {
       audioUrl: 'https://cdn.example.com/narracao.mp3',
     });
     expect(response.content[0].text).toContain('task-audio-2');
+  });
+
+  it('GenerateVideoSchema rejects non-string scriptPrompt and non-URL audioUrl', async () => {
+    // Type-guard parity with the web API (review round 5): malformed fields
+    // must fail at the tool boundary, before any HTTP call is made.
+    expect(
+      GenerateVideoSchema.safeParse({ personaId: 'p-1', scriptPrompt: 123 }).success,
+    ).toBe(false);
+    expect(
+      GenerateVideoSchema.safeParse({ personaId: 'p-1', audioUrl: 'not-a-url' }).success,
+    ).toBe(false);
+    expect(
+      GenerateVideoSchema.safeParse({ personaId: 'p-1', scriptPrompt: null }).success,
+    ).toBe(false);
   });
 
   it('handleListVoices returns the voice catalog', async () => {
