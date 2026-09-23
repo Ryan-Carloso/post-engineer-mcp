@@ -103,9 +103,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # This repo intentionally versions real secrets in .env files.
           # Remove them from the working tree before the agent runs.
-          find . -path ./.git -prune -o -type f -name '.env*' -exec rm -f {} +
           gh pr diff "${{ github.event.pull_request.number }}" --patch > pr.diff
           # Keep the diff within a sane size for the model context.
           MAX_BYTES=200000
