@@ -45,6 +45,10 @@ export const ConnectAccountSchema = z.object({
 
 export const ListSchedulesSchema = z.object({});
 
+export const ListPostsSchema = z.object({
+  limit: z.number().int().min(1).max(500).default(20),
+});
+
 export const CancelScheduleSchema = z.object({
   scheduleId: z.string().min(1, 'scheduleId is required'),
 });
@@ -318,6 +322,33 @@ export async function handleListSchedules(
         {
           type: 'text',
           text: `Error listing schedules: ${(error as Error).message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+export async function handleListPosts(
+  client: PostEngineerClient,
+  args: z.infer<typeof ListPostsSchema>
+): Promise<McpToolResponse> {
+  try {
+    const result = await client.listPosts(args.limit);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error listing posts: ${(error as Error).message}`,
         },
       ],
       isError: true,

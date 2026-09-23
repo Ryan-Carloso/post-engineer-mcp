@@ -233,6 +233,21 @@ export class PostEngineerClient {
     return response.json();
   }
 
+  async listPosts(limit = 20): Promise<unknown> {
+    const url = `${this.baseUrl}/api/schedule/status?limit=${encodeURIComponent(String(limit))}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to list posts: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
+
   async cancelSchedule(scheduleId: string): Promise<unknown> {
     const url = `${this.baseUrl}/api/schedule?id=${encodeURIComponent(scheduleId)}`;
     const response = await fetch(url, {

@@ -77,7 +77,24 @@ For OpenCode, Claude Desktop, Cursor, and other local clients using stdio:
 - \`connect_account\` — connect a social account (OAuth URL for youtube/instagram/linkedin; direct connect for bluesky with handle + appPassword)
 - \`schedule_video\`
 - \`list_schedules\`
+- \`list_posts\` — upcoming (scheduled) and past (published/failed) posts across all connected accounts
 - \`cancel_schedule\`
+
+## Example prompts
+
+Copy one of these into a chat with the app selected to see what the MCP can do:
+
+\`\`\`text
+Show me my upcoming and past posts.
+\`\`\`
+
+\`\`\`text
+What posts already went out this week, and did any fail?
+\`\`\`
+
+\`\`\`text
+What is scheduled next on my connected accounts?
+\`\`\`
 
 ## Validation endpoints
 
@@ -146,6 +163,13 @@ export const docsHtml: string = `<!doctype html>
       <li><a href="/.well-known/oauth-protected-resource">OAuth discovery metadata</a></li>
     </ul>
     <h2>Available tools</h2>
-    <p><code>list_personas</code>, <code>list_voices</code>, <code>list_faces</code>, <code>create_persona</code>, <code>update_persona</code>, <code>get_token_balance</code>, <code>generate_video_from_persona</code>, <code>get_video_status</code>, <code>list_social_accounts</code>, <code>connect_account</code>, <code>schedule_video</code>, <code>list_schedules</code>, <code>cancel_schedule</code></p>
+    <p><code>list_personas</code>, <code>list_voices</code>, <code>list_faces</code>, <code>create_persona</code>, <code>update_persona</code>, <code>get_token_balance</code>, <code>generate_video_from_persona</code>, <code>get_video_status</code>, <code>list_social_accounts</code>, <code>connect_account</code>, <code>schedule_video</code>, <code>list_schedules</code>, <code>list_posts</code>, <code>cancel_schedule</code></p>
+    <h2>Example prompts</h2>
+    <p>Copy one of these into a chat with the app selected:</p>
+    <ul>
+      <li><code>Show me my upcoming and past posts.</code></li>
+      <li><code>What posts already went out this week, and did any fail?</code></li>
+      <li><code>What is scheduled next on my connected accounts?</code></li>
+    </ul>
   </body>
 </html>`;
