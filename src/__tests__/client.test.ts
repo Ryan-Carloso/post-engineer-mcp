@@ -704,7 +704,7 @@ describe('PostEngineerClient', () => {
         scheduledAt: validTime,
         _nowForTesting: now,
       })
-    ).rejects.toThrow(/providers must be a non-empty array/i);
+    ).rejects.toThrow(/at least one provider required/i);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
@@ -793,8 +793,26 @@ describe('PostEngineerClient', () => {
         personaId: 'persona-123',
         providers: ['youtube'],
         youtubeAccountIds: ['yt-1'],
+        // Simulates an untyped JS caller omitting the now-required field.
+        scheduledAt: undefined as unknown as string,
       })
     ).rejects.toThrow(/scheduledAt is required/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a wrong-typed scheduledAt with a type error, not a presence error', async () => {
+    global.fetch = vi.fn();
+    const error = await client
+      .createSchedule({
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: 123 as unknown as string,
+      })
+      .catch((e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toMatch(/scheduledAt must be an ISO date string or Date/i);
+    expect(error.message).not.toMatch(/is required/i);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 

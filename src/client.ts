@@ -7,6 +7,8 @@ import {
   FACELESS_VOICE_MESSAGE,
   PERSONA_ID_REQUIRED_MESSAGE,
   PERSONA_VOICE_ID_MESSAGE,
+  PROVIDERS_REQUIRED_MESSAGE,
+  SCHEDULED_AT_REQUIRED_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
   VIDEO_SUBJECT_REQUIRED_MESSAGE,
   VOICE_ID_EMPTY_MESSAGE,
@@ -64,7 +66,7 @@ export interface UpdatePersonaInput {
 export interface CreateScheduleInput extends Partial<Record<ProviderAccountIdsField, string[]>> {
   personaId: string;
   providers: ScheduleProvider[];
-  scheduledAt?: string | Date;
+  scheduledAt: string | Date;
   daysOfWeek?: number[];
   startHour?: number;
   endHour?: number;
@@ -410,16 +412,16 @@ export class PostEngineerClient {
     // scheduledAt is required by the MCP schema (z.string(), no default):
     // fail fast here instead of failing server-side with an opaque error.
     // Normalized before validating: new Date() rejects padded ISO strings,
-    // so trim first and validate/send the trimmed value.
+    // so trim first and validate/send the trimmed value. Presence and type
+    // get separate messages — a supplied-but-wrong-typed value is not
+    // "missing".
     const scheduledAt =
       typeof input.scheduledAt === 'string' ? input.scheduledAt.trim() : input.scheduledAt;
-    if (
-      scheduledAt === undefined ||
-      scheduledAt === null ||
-      scheduledAt === '' ||
-      (typeof scheduledAt !== 'string' && !(scheduledAt instanceof Date))
-    ) {
-      throw new Error('scheduledAt is required (ISO date time, between 24h and 30 days in the future)');
+    if (scheduledAt === undefined || scheduledAt === null || scheduledAt === '') {
+      throw new Error(SCHEDULED_AT_REQUIRED_MESSAGE);
+    }
+    if (typeof scheduledAt !== 'string' && !(scheduledAt instanceof Date)) {
+      throw new Error('scheduledAt must be an ISO date string or Date');
     }
     const scheduledAtValidation = validateScheduleAdvance(scheduledAt, input._nowForTesting);
     if (!scheduledAtValidation.isValid) {
@@ -432,7 +434,7 @@ export class PostEngineerClient {
     // the shape checks below are untyped-JS-caller hardening that zod
     // handles on the MCP path.
     if (!Array.isArray(input.providers) || input.providers.length === 0) {
-      throw new Error('providers must be a non-empty array');
+      throw new Error(PROVIDERS_REQUIRED_MESSAGE);
     }
     // Trim provider names before the membership check: ' youtube ' is
     // accepted, consistent with the whitespace tolerance elsewhere.

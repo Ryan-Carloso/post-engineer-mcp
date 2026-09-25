@@ -47,6 +47,10 @@ export function accountIdElementMessage(field: ProviderAccountIdsField): string 
   return `${field} must contain only non-empty strings`;
 }
 
+export const PROVIDERS_REQUIRED_MESSAGE = 'At least one provider required';
+export const SCHEDULED_AT_REQUIRED_MESSAGE =
+  'scheduledAt is required (ISO date time, between 24h and 30 days in the future)';
+
 export interface ProviderAccountIssue {
   provider: ScheduleProvider;
   field: ProviderAccountIdsField;

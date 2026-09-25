@@ -8,6 +8,8 @@ import {
   FACELESS_VOICE_MESSAGE,
   PERSONA_ID_REQUIRED_MESSAGE,
   PERSONA_VOICE_ID_MESSAGE,
+  PROVIDERS_REQUIRED_MESSAGE,
+  SCHEDULED_AT_REQUIRED_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
   VIDEO_SUBJECT_REQUIRED_MESSAGE,
   VOICE_ID_EMPTY_MESSAGE,
@@ -176,7 +178,7 @@ export const ScheduleProvidersSchema = z
       z.enum(SCHEDULE_PROVIDER_NAMES)
     )
   )
-  .min(1, 'At least one provider required');
+  .min(1, PROVIDERS_REQUIRED_MESSAGE);
 
 /**
  * Account-ID fields, one per provider. `satisfies` keeps the precise field
@@ -195,7 +197,7 @@ export const ScheduleVideoObject = z.object({
   personaId: z.string().trim().min(1, PERSONA_ID_REQUIRED_MESSAGE),
   providers: ScheduleProvidersSchema.describe('Target social platforms'),
   ...accountIdsShape,
-  scheduledAt: z.string().describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
+  scheduledAt: z.string().min(1, SCHEDULED_AT_REQUIRED_MESSAGE).describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
   daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
   startHour: z.number().int().min(0).max(23).optional(),
   endHour: z.number().int().min(0).max(23).optional(),
