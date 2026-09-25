@@ -20,9 +20,15 @@ name: opencode-review
 # 2. If your Coding Plan uses a different model id, change OPENCODE_MODEL below.
 # 3. If needed, change ZAI_STANDARD_MODEL to a model available on z.ai's
 #    standard API.
+#
+# Fork-safety note (deliberate deviation from the post-engineer copy this was
+# taken from): the trigger is pull_request_target instead of pull_request so
+# the review also runs on fork PRs. The checkout lands on the trusted base
+# branch and the PR diff is pulled through the API — untrusted fork code is
+# never materialized into the working tree.
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
 
 # Cancel a superseded review when new pushes arrive.
@@ -44,7 +50,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - name: Checkout PR head
+      - name: Checkout trusted base (pull_request_target never checks out the PR head)
         uses: actions/checkout@v6
         with:
           persist-credentials: false
@@ -103,7 +109,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Remove them from the working tree before the agent runs.
+          # Defense in depth: strip any .env files from the working tree
+          # before the review agent runs.
+          find . -path ./.git -prune -o -type f -name '.env*' -exec rm -f {} +
           gh pr diff "${{ github.event.pull_request.number }}" --patch > pr.diff
           # Keep the diff within a sane size for the model context.
           MAX_BYTES=200000
