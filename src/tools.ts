@@ -8,6 +8,7 @@ import {
   PROVIDERS_REQUIRED_MESSAGE,
   PROVIDERS_TYPE_MESSAGE,
   SCHEDULED_AT_REQUIRED_MESSAGE,
+  SCHEDULE_WINDOW_BOUNDS,
   TIMEZONE_EMPTY_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
   VOICE_ID_EMPTY_MESSAGE,
@@ -16,6 +17,7 @@ import {
   formatValidationIssues,
   isValidHttpUrl,
   providerAccountIdsField,
+  scheduleWindowMessage,
   stringFieldMessage,
   unknownProviderMessage,
   validateGenerateVideoFields,
@@ -230,10 +232,37 @@ export const ScheduleVideoObject = z.object({
   providers: ScheduleProvidersSchema.describe('Target social platforms'),
   ...accountIdsShape,
   scheduledAt: z.string({ invalid_type_error: stringFieldMessage('scheduledAt') }).trim().min(1, SCHEDULED_AT_REQUIRED_MESSAGE).describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
-  daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
-  startHour: z.number().int().min(0).max(23).optional(),
-  endHour: z.number().int().min(0).max(23).optional(),
-  postsPerDay: z.number().int().min(1).max(10).optional(),
+  // Window bounds and messages are shared with the direct client's
+  // fail-fast guards (SCHEDULE_WINDOW_BOUNDS / scheduleWindowMessage), so
+  // both layers enforce and report the same values.
+  daysOfWeek: z
+    .array(
+      z
+        .number({ invalid_type_error: scheduleWindowMessage('daysOfWeek') })
+        .int(scheduleWindowMessage('daysOfWeek'))
+        .min(SCHEDULE_WINDOW_BOUNDS.dayOfWeek.min, scheduleWindowMessage('daysOfWeek'))
+        .max(SCHEDULE_WINDOW_BOUNDS.dayOfWeek.max, scheduleWindowMessage('daysOfWeek')),
+      { invalid_type_error: scheduleWindowMessage('daysOfWeek') }
+    )
+    .optional(),
+  startHour: z
+    .number({ invalid_type_error: scheduleWindowMessage('startHour') })
+    .int(scheduleWindowMessage('startHour'))
+    .min(SCHEDULE_WINDOW_BOUNDS.hour.min, scheduleWindowMessage('startHour'))
+    .max(SCHEDULE_WINDOW_BOUNDS.hour.max, scheduleWindowMessage('startHour'))
+    .optional(),
+  endHour: z
+    .number({ invalid_type_error: scheduleWindowMessage('endHour') })
+    .int(scheduleWindowMessage('endHour'))
+    .min(SCHEDULE_WINDOW_BOUNDS.hour.min, scheduleWindowMessage('endHour'))
+    .max(SCHEDULE_WINDOW_BOUNDS.hour.max, scheduleWindowMessage('endHour'))
+    .optional(),
+  postsPerDay: z
+    .number({ invalid_type_error: scheduleWindowMessage('postsPerDay') })
+    .int(scheduleWindowMessage('postsPerDay'))
+    .min(SCHEDULE_WINDOW_BOUNDS.postsPerDay.min, scheduleWindowMessage('postsPerDay'))
+    .max(SCHEDULE_WINDOW_BOUNDS.postsPerDay.max, scheduleWindowMessage('postsPerDay'))
+    .optional(),
   timezone: z.string().trim().min(1, TIMEZONE_EMPTY_MESSAGE).optional().default('UTC'),
 });
 

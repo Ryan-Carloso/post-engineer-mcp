@@ -332,7 +332,50 @@ describe('MCP Tool Handlers', () => {
       );
     });
 
-    it('does not add cross-field issues when a schedule field-level rule fails', () => {
+    it('reports schedule-window violations with the shared messages, like the client', () => {
+    const cases: Array<{ input: Record<string, unknown>; message: string }> = [
+      {
+        input: {
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          youtubeAccountIds: ['yt-1'],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+          daysOfWeek: [7],
+        },
+        message: 'daysOfWeek must be an array of integers between 0 and 6',
+      },
+      {
+        input: {
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          youtubeAccountIds: ['yt-1'],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+          startHour: 24,
+        },
+        message: 'startHour must be an integer between 0 and 23',
+      },
+      {
+        input: {
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          youtubeAccountIds: ['yt-1'],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+          postsPerDay: 0,
+        },
+        message: 'postsPerDay must be an integer between 1 and 10',
+      },
+    ];
+    for (const { input, message } of cases) {
+      const result = ScheduleVideoSchema.safeParse(input);
+      expect(result.success).toBe(false);
+      if (result.success) {
+        continue;
+      }
+      expect(result.error.issues.map((issue) => issue.message)).toContain(message);
+    }
+  });
+
+  it('does not add cross-field issues when a schedule field-level rule fails', () => {
     // Same fail-fast parity as GenerateVideoSchema: a blank personaId is
     // the real problem, so no per-provider account-ID issues are added.
     const result = ScheduleVideoSchema.safeParse({

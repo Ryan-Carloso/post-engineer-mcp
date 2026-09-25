@@ -179,20 +179,37 @@ export function unknownProviderMessage(provider: unknown): string {
 }
 
 /**
+ * Schedule-window bounds, shared by the schema chains, the direct
+ * client's fail-fast guards, and scheduleWindowMessage — a bound change
+ * touches only this object.
+ */
+export const SCHEDULE_WINDOW_BOUNDS = {
+  dayOfWeek: { min: 0, max: 6 },
+  hour: { min: 0, max: 23 },
+  postsPerDay: { min: 1, max: 10 },
+} as const;
+
+/**
  * Fail-fast message for the optional schedule-window fields, mirroring the
- * ScheduleVideoObject zod bounds (daysOfWeek: int 0-6, startHour/endHour:
- * int 0-23, postsPerDay: int 1-10).
+ * ScheduleVideoObject zod bounds. Bounds are interpolated from
+ * SCHEDULE_WINDOW_BOUNDS so the text can't drift from the enforced values.
  */
 export function scheduleWindowMessage(
   field: 'daysOfWeek' | 'startHour' | 'endHour' | 'postsPerDay'
 ): string {
   switch (field) {
-    case 'daysOfWeek':
-      return 'daysOfWeek must be an array of integers between 0 and 6';
-    case 'postsPerDay':
-      return 'postsPerDay must be an integer between 1 and 10';
-    default:
-      return `${field} must be an integer between 0 and 23`;
+    case 'daysOfWeek': {
+      const { min, max } = SCHEDULE_WINDOW_BOUNDS.dayOfWeek;
+      return `daysOfWeek must be an array of integers between ${min} and ${max}`;
+    }
+    case 'postsPerDay': {
+      const { min, max } = SCHEDULE_WINDOW_BOUNDS.postsPerDay;
+      return `postsPerDay must be an integer between ${min} and ${max}`;
+    }
+    default: {
+      const { min, max } = SCHEDULE_WINDOW_BOUNDS.hour;
+      return `${field} must be an integer between ${min} and ${max}`;
+    }
   }
 }
 

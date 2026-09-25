@@ -927,6 +927,36 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('rejects a non-string personaId with the type message, not "required"', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.createSchedule({
+        personaId: 42 as unknown as string,
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+      })
+    ).rejects.toThrow(/personaId must be a string/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('trims padded account IDs in the payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    global.fetch = fetchMock;
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
+    await client.createSchedule({
+      personaId: 'persona-123',
+      providers: ['youtube'],
+      youtubeAccountIds: ['  yt-1  '],
+      scheduledAt: validTime,
+      _nowForTesting: now,
+    });
+    const payload = JSON.parse(
+      (fetchMock.mock.calls[0][1] as { body: string }).body
+    );
+    expect(payload.youtubeAccountIds).toEqual(['yt-1']);
+  });
+
   it('accepts padded provider names and trims them', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
     global.fetch = fetchMock;

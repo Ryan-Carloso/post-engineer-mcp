@@ -9,6 +9,7 @@ import {
   PROVIDERS_TYPE_MESSAGE,
   SCHEDULED_AT_REQUIRED_MESSAGE,
   SCHEDULED_AT_TYPE_MESSAGE,
+  SCHEDULE_WINDOW_BOUNDS,
   TIMEZONE_EMPTY_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
   VOICE_ID_EMPTY_MESSAGE,
@@ -417,8 +418,13 @@ export class PostEngineerClient {
       throw new Error(INPUT_OBJECT_MESSAGE);
     }
     // Mirror generateVideoJob's hardening: a blank or non-string personaId
-    // fails fast here instead of server-side.
-    if (typeof input.personaId !== 'string' || input.personaId.trim() === '') {
+    // fails fast here instead of server-side. Presence and type get
+    // separate messages — a supplied-but-wrong-typed value is not
+    // "missing" — matching the schema's invalid_type_error vs min(1).
+    if (typeof input.personaId !== 'string') {
+      throw new Error(stringFieldMessage('personaId'));
+    }
+    if (input.personaId.trim() === '') {
       throw new Error(PERSONA_ID_REQUIRED_MESSAGE);
     }
     const personaId = input.personaId.trim();
@@ -464,28 +470,34 @@ export class PostEngineerClient {
       }
       providers.push(provider);
     }
-    // Shape + element validation for every account-ID field (declared or
-    // not), mirroring the schema's array(z.string().trim().min(1)): a
-    // non-array field gets an accurate type error instead of a misleading
-    // "is empty", and padded IDs (' a ') converge on trimmed values in the
-    // payload builder below on both paths.
+    // Validate and normalize the account-ID fields in a single pass,
+    // mirroring the schema's array(z.string().trim().min(1)): a non-array
+    // field gets an accurate type error instead of a misleading "is
+    // empty", blank elements are rejected, and the trimmed arrays below
+    // are reused by validateScheduleFields and the payload builder — the
+    // schema likewise validates the trimmed values. The `as` cast is
+    // sound: the loop assigns every SCHEDULE_PROVIDER_NAMES-derived field.
+    const accountIds = {} as Record<ProviderAccountIdsField, string[]>;
     for (const provider of SCHEDULE_PROVIDER_NAMES) {
       const field = providerAccountIdsField(provider);
       const ids = input[field];
       if (ids !== undefined && !Array.isArray(ids)) {
         throw new Error(accountIdFieldTypeMessage(field));
       }
+      const trimmed: string[] = [];
       if (Array.isArray(ids)) {
         for (const id of ids) {
           if (typeof id !== 'string' || id.trim() === '') {
             throw new Error(accountIdElementMessage(field));
           }
+          trimmed.push(id.trim());
         }
       }
+      accountIds[field] = trimmed;
     }
     const missingAccountIds = validateScheduleFields({
       providers,
-      accountIds: (field) => input[field],
+      accountIds: (field) => accountIds[field],
     });
     if (missingAccountIds.length > 0) {
       // Report every missing provider at once, like the schema's superRefine,
@@ -495,26 +507,32 @@ export class PostEngineerClient {
     }
     // Fail-fast guards for the optional schedule-window fields, mirroring
     // the ScheduleVideoObject zod bounds: untyped JS callers get a clear
-    // error here instead of an opaque server-side rejection.
+    // error here instead of an opaque server-side rejection. Bounds come
+    // from SCHEDULE_WINDOW_BOUNDS, shared with the schema chains.
     if (input.daysOfWeek !== undefined) {
+      const { min, max } = SCHEDULE_WINDOW_BOUNDS.dayOfWeek;
       const validDays =
         Array.isArray(input.daysOfWeek) &&
-        input.daysOfWeek.every((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+        input.daysOfWeek.every((day) => Number.isInteger(day) && day >= min && day <= max);
       if (!validDays) {
         throw new Error(scheduleWindowMessage('daysOfWeek'));
       }
     }
     for (const field of ['startHour', 'endHour'] as const) {
+      const { min, max } = SCHEDULE_WINDOW_BOUNDS.hour;
       const value = input[field];
-      if (value !== undefined && (!Number.isInteger(value) || value < 0 || value > 23)) {
+      if (value !== undefined && (!Number.isInteger(value) || value < min || value > max)) {
         throw new Error(scheduleWindowMessage(field));
       }
     }
-    if (
-      input.postsPerDay !== undefined &&
-      (!Number.isInteger(input.postsPerDay) || input.postsPerDay < 1 || input.postsPerDay > 10)
-    ) {
-      throw new Error(scheduleWindowMessage('postsPerDay'));
+    {
+      const { min, max } = SCHEDULE_WINDOW_BOUNDS.postsPerDay;
+      if (
+        input.postsPerDay !== undefined &&
+        (!Number.isInteger(input.postsPerDay) || input.postsPerDay < min || input.postsPerDay > max)
+      ) {
+        throw new Error(scheduleWindowMessage('postsPerDay'));
+      }
     }
     // Trimmed like every other string field here: a padded value (' UTC ')
     // is normalized, and an explicit blank is rejected rather than
@@ -528,15 +546,9 @@ export class PostEngineerClient {
     }
 
     const url = `${this.baseUrl}/api/schedule`;
-    // Account-ID fields are derived from the shared provider list via the
-    // shared field-name helper so a new provider cannot be silently dropped
-    // from the payload. All fields were validated as string arrays above.
-    const accountIds = Object.fromEntries(
-      SCHEDULE_PROVIDER_NAMES.map((provider) => {
-        const field = providerAccountIdsField(provider);
-        return [field, (input[field] ?? []).map((id) => id.trim())];
-      })
-    );
+    // Account-ID fields were validated and trimmed in the single pass
+    // above; spreading them here keeps every provider present in the
+    // payload so a new provider cannot be silently dropped.
     const response = await fetch(url, {
       method: 'POST',
       headers: this.getHeaders(),
