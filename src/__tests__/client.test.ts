@@ -556,7 +556,8 @@ describe('PostEngineerClient', () => {
     expect(result).toEqual(mockStatus);
   });
 
-  it('rejects schedule if target slot is less than 24h away without calling API', async () => {    global.fetch = vi.fn();
+  it('rejects schedule if target slot is less than 24h away without calling API', async () => {
+    global.fetch = vi.fn();
     const now = new Date('2026-09-18T09:00:00.000Z');
     const tooSoon = new Date('2026-09-18T18:00:00.000Z').toISOString();
 
@@ -573,7 +574,8 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('rejects when a declared provider has no account IDs without calling API', async () => {    global.fetch = vi.fn();
+  it('rejects when a declared provider has no account IDs without calling API', async () => {
+    global.fetch = vi.fn();
     const now = new Date('2026-09-18T09:00:00.000Z');
     const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
 
@@ -590,8 +592,7 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('rejects an unknown provider without calling API', async () => {
-    global.fetch = vi.fn();
+  it('rejects an unknown provider without calling API', async () => {    global.fetch = vi.fn();
     await expect(
       client.createSchedule({
         personaId: 'persona-123',
@@ -600,6 +601,30 @@ describe('PostEngineerClient', () => {
       } as never)
     ).rejects.toThrow(/Unknown provider 'tiktok'/i);
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('deduplicates providers in the schedule payload', async () => {
+    const mockSchedule = { success: true, scheduleId: 'sched-dupe-1' };
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockSchedule,
+    });
+
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
+
+    await client.createSchedule({
+      personaId: 'persona-123',
+      providers: ['youtube', 'youtube'],
+      youtubeAccountIds: ['yt-1'],
+      scheduledAt: validTime,
+      _nowForTesting: now,
+    });
+
+    const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
+    const payload = JSON.parse(fetchBody.body);
+    expect(payload.providers).toEqual(['youtube']);
   });
 
   it('rejects when providers is omitted without calling API', async () => {

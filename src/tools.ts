@@ -98,7 +98,7 @@ function parseArgsOrError<Input, Output>(
 }
 
 export const GenerateVideoObject = z.object({
-  personaId: z.string().min(1, 'personaId is required').optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
+  personaId: z.string().trim().min(1, 'personaId is required').optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
   scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
   audioUrl: z
     .string()
@@ -147,15 +147,16 @@ export const ScheduleProvidersSchema = z
   .min(1, 'At least one provider required');
 
 /**
- * Account-ID fields, one per provider. The mapped type makes adding a provider
- * to SCHEDULE_PROVIDER_NAMES a compile error until its field is added here.
+ * Account-ID fields, one per provider. `satisfies` keeps the precise field
+ * types (so z.infer resolves string[], not any) while still failing to
+ * compile if a provider is added without its account-ID field.
  */
-const accountIdsShape: { [K in ProviderAccountIdsField]: z.ZodTypeAny } = {
-  youtubeAccountIds: z.array(z.string().min(1)).optional().default([]),
-  instagramAccountIds: z.array(z.string().min(1)).optional().default([]),
-  linkedinAccountIds: z.array(z.string().min(1)).optional().default([]),
-  blueskyAccountIds: z.array(z.string().min(1)).optional().default([]),
-};
+const accountIdsShape = {
+  youtubeAccountIds: z.array(z.string().trim().min(1)).optional().default([]),
+  instagramAccountIds: z.array(z.string().trim().min(1)).optional().default([]),
+  linkedinAccountIds: z.array(z.string().trim().min(1)).optional().default([]),
+  blueskyAccountIds: z.array(z.string().trim().min(1)).optional().default([]),
+} satisfies Record<ProviderAccountIdsField, z.ZodTypeAny>;
 
 export const ScheduleVideoObject = z.object({
   personaId: z.string().min(1, 'personaId is required'),
@@ -514,9 +515,9 @@ export async function handleGetTokenBalance(
 
 export async function handleGenerateVideo(
   client: PostEngineerClient,
-  // Note: typed as the parsed schema output, but at the transport boundary the
-  // SDK hands us the raw, unparsed args — re-parsed below via parseArgsOrError.
-  args: z.infer<typeof GenerateVideoSchema>
+  // z.input (not z.infer): at the transport boundary the SDK hands us the
+  // raw, unparsed args — re-parsed below via parseArgsOrError.
+  args: z.input<typeof GenerateVideoSchema>
 ): Promise<McpToolResponse> {
   // Cross-field rules (faceless needs a voice source; exactly one of
   // audioUrl/voiceId) live on the schema — the SDK only checks the raw
@@ -575,9 +576,9 @@ export async function handleGetVideoStatus(
 
 export async function handleScheduleVideo(
   client: PostEngineerClient,
-  // Note: typed as the parsed schema output, but at the transport boundary the
-  // SDK hands us the raw, unparsed args — re-parsed below via parseArgsOrError.
-  args: z.infer<typeof ScheduleVideoSchema>
+  // z.input (not z.infer): at the transport boundary the SDK hands us the
+  // raw, unparsed args — re-parsed below via parseArgsOrError.
+  args: z.input<typeof ScheduleVideoSchema>
 ): Promise<McpToolResponse> {
   // Cross-field rule (each declared provider needs its account IDs) lives
   // on the schema — the SDK only checks the raw shape, so enforce it here

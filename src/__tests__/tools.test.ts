@@ -146,6 +146,18 @@ describe('MCP Tool Handlers', () => {
     expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
   });
 
+  it('handleGenerateVideo returns an error for a whitespace-only personaId', async () => {
+    vi.clearAllMocks();
+    const response = await handleGenerateVideo(mockClient, {
+      personaId: '   ',
+      audioUrl: 'https://cdn.example.com/narracao.mp3',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toMatch(/personaId/i);
+    expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
+  });
+
   it('handleGenerateVideo returns an error when voiceId is used with a personaId', async () => {
     vi.clearAllMocks();
     const response = await handleGenerateVideo(mockClient, {

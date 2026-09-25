@@ -431,7 +431,11 @@ export class PostEngineerClient {
       headers: this.getHeaders(),
       body: JSON.stringify({
         personaId: input.personaId,
-        providers: input.providers,
+        // Deduplicated: the MCP path's zod shape doesn't dedupe either, but
+        // sending each provider once is the sane request body. Only known
+        // account-ID fields are spread above, so extraneous keys from
+        // untyped callers never reach the request body.
+        providers: [...new Set(input.providers)],
         ...accountIds,
         scheduledAt: input.scheduledAt,
         daysOfWeek: input.daysOfWeek,
