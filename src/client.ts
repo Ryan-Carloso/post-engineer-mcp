@@ -1,12 +1,14 @@
 import { validateScheduleAdvance } from './validator.js';
 import type { ProviderAccountIdsField, ScheduleProvider } from './shared.js';
 import {
+  FACELESS_VOICE_BOTH_MESSAGE,
   FACELESS_VOICE_MESSAGE,
   PERSONA_VOICE_ID_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
   hasExactlyOneVoiceSource,
   isValidHttpUrl,
   providerAccountIdsField,
+  trimOptionalString,
 } from './shared.js';
 
 export interface PostEngineerClientOptions {
@@ -295,16 +297,32 @@ export class PostEngineerClient {
     // faceless generation needs exactly one voice source, and voiceId is
     // rejected alongside personaId. Blank strings are invalid input, not
     // absent values: a blank personaId is rejected (not treated as faceless),
-    // and blank voice sources count as not provided. The server rejects
-    // invalid combinations.
-    if (input.personaId !== undefined && input.personaId.trim() === '') {
+    // and blank voice sources count as not provided. Non-string values from
+    // untyped JS callers are treated as absent so they surface as validation
+    // errors instead of TypeErrors. The server rejects invalid combinations.
+    // Non-string values from untyped JS callers get a clear error, not a
+    // TypeError on .trim() — and a mistyped personaId must not silently flip
+    // the call into faceless mode.
+    for (const [name, value] of [
+      ['personaId', input.personaId],
+      ['audioUrl', input.audioUrl],
+      ['voiceId', input.voiceId],
+    ] as const) {
+      if (value !== undefined && typeof value !== 'string') {
+        throw new Error(`${name} must be a string`);
+      }
+    }
+    if (typeof input.personaId === 'string' && input.personaId.trim() === '') {
       throw new Error('personaId is required');
     }
-    const personaId = input.personaId?.trim() || undefined;
-    const audioUrl = input.audioUrl?.trim() || undefined;
-    const voiceId = input.voiceId?.trim() || undefined;
+    const personaId = trimOptionalString(input.personaId);
+    const audioUrl = trimOptionalString(input.audioUrl);
+    const voiceId = trimOptionalString(input.voiceId);
     if (!personaId && !hasExactlyOneVoiceSource(audioUrl, voiceId)) {
-      throw new Error(FACELESS_VOICE_MESSAGE);
+      // The "(or provide personaId)" advice only applies when neither source
+      // is given; when both are given, providing a personaId would itself be
+      // rejected by the next guard.
+      throw new Error(audioUrl && voiceId ? FACELESS_VOICE_BOTH_MESSAGE : FACELESS_VOICE_MESSAGE);
     }
     if (personaId && voiceId) {
       throw new Error(PERSONA_VOICE_ID_MESSAGE);
@@ -356,23 +374,34 @@ export class PostEngineerClient {
       }
     }
 
-    // Mirror the MCP schema's superRefine rule: every declared provider needs
-    // at least one account ID. Fail fast instead of hitting the server.
+    // Mirror the MCP schema's superRefine rule: providers must be a non-empty
+    // array, and every declared provider needs at least one account ID. Fail
+    // fast instead of hitting the server (or throwing a TypeError).
+    if (!Array.isArray(input.providers) || input.providers.length === 0) {
+      throw new Error('providers must be a non-empty array');
+    }
     for (const provider of new Set(input.providers)) {
       const field = providerAccountIdsField(provider);
-      if ((input[field] ?? []).length === 0) {
+      const ids = input[field];
+      if (!Array.isArray(ids) || ids.length === 0) {
         throw new Error(`providers includes '${provider}' but ${field} is empty`);
+      }
+      for (const id of ids) {
+        if (typeof id !== 'string' || id.trim() === '') {
+          throw new Error(`${field} must contain only non-empty strings`);
+        }
       }
     }
 
     const url = `${this.baseUrl}/api/schedule`;
     // Account-ID fields are derived from the shared provider list via the
     // shared field-name helper so a new provider cannot be silently dropped
-    // from the payload.
+    // from the payload. IDs are trimmed defensively (validated above).
     const accountIds = Object.fromEntries(
       SCHEDULE_PROVIDER_NAMES.map((provider) => {
         const field = providerAccountIdsField(provider);
-        return [field, input[field] ?? []];
+        const ids = input[field];
+        return [field, Array.isArray(ids) ? ids.map((id) => (typeof id === 'string' ? id.trim() : id)) : []];
       })
     );
     const response = await fetch(url, {

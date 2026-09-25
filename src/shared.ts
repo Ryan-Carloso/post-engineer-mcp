@@ -21,6 +21,13 @@ export const FACELESS_VOICE_RULE = 'exactly one of audioUrl or voiceId';
 /** Full message for the faceless voice-source rule, shared with the client's fail-fast guard. */
 export const FACELESS_VOICE_MESSAGE = `Faceless generation requires ${FACELESS_VOICE_RULE} (or provide personaId)`;
 
+/**
+ * Message for the both-sources case. Kept separate from FACELESS_VOICE_MESSAGE
+ * because "(or provide personaId)" is wrong advice when both sources are
+ * already provided.
+ */
+export const FACELESS_VOICE_BOTH_MESSAGE = `Faceless generation needs ${FACELESS_VOICE_RULE}, not both`;
+
 /** Message for voiceId supplied alongside personaId, shared with the client's fail-fast guard. */
 export const PERSONA_VOICE_ID_MESSAGE =
   'voiceId is only used for faceless generation; remove voiceId when personaId is provided';
@@ -32,6 +39,17 @@ export const PERSONA_VOICE_ID_MESSAGE =
  */
 export function hasExactlyOneVoiceSource(audioUrl?: string, voiceId?: string): boolean {
   return Boolean(audioUrl) !== Boolean(voiceId);
+}
+
+/**
+ * Trim an optional free-text input. Non-string values (possible from untyped
+ * JS callers) are treated as absent so they surface as a clear validation
+ * error instead of a TypeError on .trim().
+ */
+export function trimOptionalString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
 }
 
 /**

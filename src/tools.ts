@@ -2,8 +2,8 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { PostEngineerClient } from './client.js';
 import {
+  FACELESS_VOICE_BOTH_MESSAGE,
   FACELESS_VOICE_MESSAGE,
-  FACELESS_VOICE_RULE,
   PERSONA_VOICE_ID_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
   hasExactlyOneVoiceSource,
@@ -121,8 +121,10 @@ export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) =>
     const neither = !val.audioUrl && !val.voiceId;
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: neither ? FACELESS_VOICE_MESSAGE : `Faceless generation needs ${FACELESS_VOICE_RULE}, not both`,
-      path: neither ? [] : ['voiceId'],
+      // Form-level issue (path []): the combination is wrong, not one field
+      // alone — blaming only voiceId would mislead callers.
+      path: [],
+      message: neither ? FACELESS_VOICE_MESSAGE : FACELESS_VOICE_BOTH_MESSAGE,
     });
     return;
   }

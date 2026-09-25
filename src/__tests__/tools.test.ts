@@ -117,8 +117,9 @@ describe('MCP Tool Handlers', () => {
     });
 
     expect(response.isError).toBe(true);
+    // Form-level issue: no field prefix, since the combination is wrong.
     expect(response.content[0].text).toBe(
-      'Invalid arguments: voiceId: Faceless generation needs exactly one of audioUrl or voiceId, not both'
+      'Invalid arguments: Faceless generation needs exactly one of audioUrl or voiceId, not both'
     );
     expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
   });

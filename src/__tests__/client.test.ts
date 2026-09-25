@@ -466,6 +466,31 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('rejects when both voice sources are provided without suggesting personaId', async () => {
+    global.fetch = vi.fn();
+    const error = await client
+      .generateVideoJob({
+        audioUrl: 'https://cdn.example.com/a.mp3',
+        voiceId: 'voice-calm-1',
+      })
+      .catch((e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toMatch(/not both/i);
+    expect(error.message).not.toMatch(/personaId/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-string personaId instead of throwing a TypeError', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.generateVideoJob({
+        personaId: 123 as unknown as string,
+        audioUrl: 'https://cdn.example.com/a.mp3',
+      })
+    ).rejects.toThrow(/personaId must be a string/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('treats a blank voiceId as not provided', async () => {
     global.fetch = vi.fn();
     await expect(
@@ -534,8 +559,7 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('rejects when a declared provider has no account IDs without calling API', async () => {
-    global.fetch = vi.fn();
+  it('rejects when a declared provider has no account IDs without calling API', async () => {    global.fetch = vi.fn();
     const now = new Date('2026-09-18T09:00:00.000Z');
     const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
 
@@ -549,6 +573,29 @@ describe('PostEngineerClient', () => {
       })
     ).rejects.toThrow(/blueskyAccountIds.*empty/i);
 
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects when providers is omitted without calling API', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.createSchedule({
+        personaId: 'persona-123',
+        providers: undefined as unknown as [],
+      })
+    ).rejects.toThrow(/providers must be a non-empty array/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects when an account ID is blank without calling API', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.createSchedule({
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['  '],
+      })
+    ).rejects.toThrow(/youtubeAccountIds must contain only non-empty strings/i);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
