@@ -232,6 +232,26 @@ describe('MCP Tool Handlers', () => {
       ).toThrow(/videoSubject is required for faceless generation/i);
     });
 
+    it('reports a blank videoSubject alongside personaId as an invalid override', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          personaId: 'persona-123',
+          videoSubject: '   ',
+        })
+      ).toThrow(/videoSubject must be a non-empty string when provided/i);
+    });
+
+    it('reports a non-array account-ID field with the shared message, not zod’s default', () => {
+      expect(() =>
+        ScheduleVideoSchema.parse({
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          youtubeAccountIds: 'yt-1' as unknown as string[],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+        })
+      ).toThrow(/youtubeAccountIds must be an array of strings/i);
+    });
+
     it('rejects faceless generation with both audioUrl and voiceId', () => {
       expect(() =>
         GenerateVideoSchema.parse({

@@ -16,6 +16,7 @@ import {
   VIDEO_SUBJECT_REQUIRED_MESSAGE,
   VOICE_ID_EMPTY_MESSAGE,
   accountIdElementMessage,
+  accountIdFieldTypeMessage,
   findProvidersMissingAccountIds,
   hasExactlyOneVoiceSource,
   isScheduleProvider,
@@ -490,7 +491,7 @@ export class PostEngineerClient {
       const field = providerAccountIdsField(provider);
       const ids = input[field];
       if (ids !== undefined && !Array.isArray(ids)) {
-        throw new Error(`${field} must be an array of strings`);
+        throw new Error(accountIdFieldTypeMessage(field));
       }
       if (Array.isArray(ids)) {
         for (const id of ids) {

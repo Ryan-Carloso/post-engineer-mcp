@@ -11,9 +11,11 @@ import {
   PROVIDERS_REQUIRED_MESSAGE,
   SCHEDULED_AT_REQUIRED_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
+  VIDEO_SUBJECT_NON_EMPTY_MESSAGE,
   VIDEO_SUBJECT_REQUIRED_MESSAGE,
   VOICE_ID_EMPTY_MESSAGE,
   accountIdElementMessage,
+  accountIdFieldTypeMessage,
   findProvidersMissingAccountIds,
   hasExactlyOneVoiceSource,
   isValidHttpUrl,
@@ -129,7 +131,6 @@ export const GenerateVideoObject = z.object({
   videoSubject: z
     .string({ invalid_type_error: stringFieldMessage('videoSubject') })
     .trim()
-    .min(1, VIDEO_SUBJECT_REQUIRED_MESSAGE)
     .optional()
     .describe(
       'Subject/topic of the video. Required for faceless generation (when personaId is omitted); sent as video_subject.'
@@ -141,7 +142,15 @@ export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) =>
   // isn't sent fix-one-retry-fix-another. The faceless branches and the
   // persona branch are mutually exclusive (personaId falsy vs truthy), so
   // falling through is safe.
-  if (!val.personaId && !val.videoSubject) {
+  if (val.videoSubject === '') {
+    // Provided-but-blank (post-trim): context-aware — alongside a persona
+    // it's an invalid override, in faceless mode a missing requirement.
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['videoSubject'],
+      message: val.personaId ? VIDEO_SUBJECT_NON_EMPTY_MESSAGE : VIDEO_SUBJECT_REQUIRED_MESSAGE,
+    });
+  } else if (!val.personaId && !val.videoSubject) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['videoSubject'],
@@ -190,10 +199,30 @@ export const ScheduleProvidersSchema = z
  * messages match the direct client's accountIdElementMessage wording.
  */
 const accountIdsShape = {
-  youtubeAccountIds: z.array(z.string().trim().min(1, accountIdElementMessage('youtubeAccountIds'))).optional().default([]),
-  instagramAccountIds: z.array(z.string().trim().min(1, accountIdElementMessage('instagramAccountIds'))).optional().default([]),
-  linkedinAccountIds: z.array(z.string().trim().min(1, accountIdElementMessage('linkedinAccountIds'))).optional().default([]),
-  blueskyAccountIds: z.array(z.string().trim().min(1, accountIdElementMessage('blueskyAccountIds'))).optional().default([]),
+  youtubeAccountIds: z
+    .array(z.string().trim().min(1, accountIdElementMessage('youtubeAccountIds')), {
+      invalid_type_error: accountIdFieldTypeMessage('youtubeAccountIds'),
+    })
+    .optional()
+    .default([]),
+  instagramAccountIds: z
+    .array(z.string().trim().min(1, accountIdElementMessage('instagramAccountIds')), {
+      invalid_type_error: accountIdFieldTypeMessage('instagramAccountIds'),
+    })
+    .optional()
+    .default([]),
+  linkedinAccountIds: z
+    .array(z.string().trim().min(1, accountIdElementMessage('linkedinAccountIds')), {
+      invalid_type_error: accountIdFieldTypeMessage('linkedinAccountIds'),
+    })
+    .optional()
+    .default([]),
+  blueskyAccountIds: z
+    .array(z.string().trim().min(1, accountIdElementMessage('blueskyAccountIds')), {
+      invalid_type_error: accountIdFieldTypeMessage('blueskyAccountIds'),
+    })
+    .optional()
+    .default([]),
 } satisfies Record<ProviderAccountIdsField, z.ZodTypeAny>;
 
 export const ScheduleVideoObject = z.object({
