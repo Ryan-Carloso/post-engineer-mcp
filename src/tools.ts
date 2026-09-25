@@ -79,6 +79,21 @@ export const ScheduleVideoSchema = z.object({
   timezone: z.string().optional().default('UTC'),
 });
 
+export const ScheduleVideoBatchSchema = z.object({
+  personaId: z.string().min(1, 'personaId is required'),
+  items: z
+    .array(z.object({ topic: z.string().trim().min(1, 'Every item needs a non-empty topic') }))
+    .min(1, 'At least one item required')
+    .max(30, 'At most 30 items per batch'),
+  providers: z
+    .array(z.enum(['youtube', 'instagram', 'linkedin', 'bluesky']))
+    .min(1, 'At least one provider required'),
+  times: z
+    .array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'times must be "HH:MM"'))
+    .min(1, 'At least one time required'),
+  timezone: z.string().min(1, 'timezone is required'),
+});
+
 export async function handleCreatePersona(
   client: PostEngineerClient,
   args: z.infer<typeof CreatePersonaSchema>
@@ -483,6 +498,33 @@ export async function handleScheduleVideo(
         {
           type: 'text',
           text: `Error scheduling video: ${(error as Error).message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+export async function handleScheduleVideoBatch(
+  client: PostEngineerClient,
+  args: z.infer<typeof ScheduleVideoBatchSchema>
+): Promise<McpToolResponse> {
+  try {
+    const result = await client.scheduleVideoBatch(args);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Video batch scheduled successfully: ${JSON.stringify(result, null, 2)}`,
+        },
+      ],
+    };
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error scheduling video batch: ${(error as Error).message}`,
         },
       ],
       isError: true,

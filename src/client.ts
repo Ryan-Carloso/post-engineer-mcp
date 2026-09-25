@@ -50,6 +50,14 @@ export interface CreateScheduleInput {
   _nowForTesting?: Date;
 }
 
+export interface ScheduleVideoBatchInput {
+  personaId: string;
+  items: { topic: string }[];
+  providers: ('youtube' | 'instagram' | 'linkedin' | 'bluesky')[];
+  times: string[];
+  timezone: string;
+}
+
 const PRODUCTION_API_URL = 'https://post-engineer.com';
 
 export class PostEngineerClient {
@@ -343,6 +351,28 @@ export class PostEngineerClient {
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Failed to create schedule: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
+
+  async scheduleVideoBatch(input: ScheduleVideoBatchInput): Promise<unknown> {
+    const url = `${this.baseUrl}/api/schedule/batch`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({
+        personaId: input.personaId,
+        items: input.items,
+        providers: input.providers,
+        times: input.times,
+        timezone: input.timezone,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to schedule video batch: ${response.status} ${errorText}`);
     }
 
     return response.json();

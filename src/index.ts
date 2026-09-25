@@ -18,6 +18,7 @@ import {
   handleGenerateVideo,
   handleGetVideoStatus,
   handleScheduleVideo,
+  handleScheduleVideoBatch,
 } from './tools.js';
 import { startHttpServer } from './http.js';
 
@@ -203,6 +204,31 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
     },
     async (args) => {
       return handleScheduleVideo(apiClient, args);
+    }
+  );
+
+  server.tool(
+    'schedule_video_batch',
+    'Schedule a finite manual batch of videos (1-30). Each items entry becomes exactly one video with its own topic. Tokens are charged upfront for the whole batch (insufficient balance returns an INSUFFICIENT error and nothing is created); videos generate at the 06:00 UTC cutoff. The N slot times are the next chronological occurrences of `times` in `timezone`.',
+    {
+      personaId: z.string().min(1, 'personaId is required').describe('The ID of the persona'),
+      items: z
+        .array(z.object({ topic: z.string().min(1).describe('Topic for this video') }))
+        .min(1, 'At least one item required')
+        .max(30, 'At most 30 items per batch')
+        .describe('One entry per video; each entry becomes exactly one video'),
+      providers: z
+        .array(z.enum(['youtube', 'instagram', 'linkedin', 'bluesky']))
+        .min(1, 'At least one provider required')
+        .describe('Target social platforms'),
+      times: z
+        .array(z.string())
+        .min(1, 'At least one time required')
+        .describe('Daily "HH:MM" times; slots are the next N chronological occurrences'),
+      timezone: z.string().describe('IANA timezone for the times, e.g. "Europe/Lisbon"'),
+    },
+    async (args) => {
+      return handleScheduleVideoBatch(apiClient, args);
     }
   );
 
