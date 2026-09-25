@@ -59,6 +59,13 @@ export function stringFieldMessage(field: string): string {
 /** Guard for direct-client methods called with null/undefined by untyped JS callers. */
 export const INPUT_OBJECT_MESSAGE = 'input must be an object';
 
+/** Wrong-typed scheduledAt from direct (untyped) callers — the client accepts Date, the schema does not. */
+export const SCHEDULED_AT_TYPE_MESSAGE = 'scheduledAt must be an ISO date string or Date';
+
+/** Blank videoSubject alongside a personaId: an invalid override, not a missing faceless requirement. */
+export const VIDEO_SUBJECT_NON_EMPTY_MESSAGE =
+  'videoSubject must be a non-empty string when provided';
+
 export interface ProviderAccountIssue {
   provider: ScheduleProvider;
   field: ProviderAccountIdsField;

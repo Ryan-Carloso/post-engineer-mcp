@@ -302,6 +302,14 @@ describe('MCP Tool Handlers', () => {
       ).toThrow(/audioUrl must be a string/i);
     });
 
+    it('trims scriptPrompt on the schema path, matching the client normalization', () => {
+      const parsed = GenerateVideoSchema.parse({
+        personaId: 'persona-123',
+        scriptPrompt: '  Make it punchy  ',
+      });
+      expect(parsed.scriptPrompt).toBe('Make it punchy');
+    });
+
     it('reports every faceless issue at once', () => {
       expect(() => GenerateVideoSchema.parse({})).toThrow(
         /videoSubject is required for faceless generation/i

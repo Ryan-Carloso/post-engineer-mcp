@@ -458,6 +458,17 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('reports a blank videoSubject alongside personaId as an invalid override', async () => {
+    global.fetch = vi.fn();
+    const error = await client
+      .generateVideoJob({ personaId: 'persona-123', videoSubject: '   ' })
+      .catch((e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toMatch(/videoSubject must be a non-empty string when provided/i);
+    expect(error.message).not.toMatch(/faceless/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('throws before the request for faceless generation with no voice source', async () => {
     global.fetch = vi.fn();
     await expect(

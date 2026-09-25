@@ -10,7 +10,9 @@ import {
   PERSONA_VOICE_ID_MESSAGE,
   PROVIDERS_REQUIRED_MESSAGE,
   SCHEDULED_AT_REQUIRED_MESSAGE,
+  SCHEDULED_AT_TYPE_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
+  VIDEO_SUBJECT_NON_EMPTY_MESSAGE,
   VIDEO_SUBJECT_REQUIRED_MESSAGE,
   VOICE_ID_EMPTY_MESSAGE,
   accountIdElementMessage,
@@ -347,7 +349,14 @@ export class PostEngineerClient {
       throw new Error(AUDIO_URL_EMPTY_MESSAGE);
     }
     if (input.videoSubject !== undefined && input.videoSubject.trim() === '') {
-      throw new Error(VIDEO_SUBJECT_REQUIRED_MESSAGE);
+      // A blank videoSubject is only "required" in faceless mode; alongside
+      // a persona it's an invalid override, so report that instead of the
+      // faceless-worded shared message.
+      throw new Error(
+        trimOptionalString(input.personaId) !== undefined
+          ? VIDEO_SUBJECT_NON_EMPTY_MESSAGE
+          : VIDEO_SUBJECT_REQUIRED_MESSAGE
+      );
     }
     const personaId = trimOptionalString(input.personaId);
     const audioUrl = trimOptionalString(input.audioUrl);
@@ -445,7 +454,7 @@ export class PostEngineerClient {
       throw new Error(SCHEDULED_AT_REQUIRED_MESSAGE);
     }
     if (typeof scheduledAt !== 'string' && !(scheduledAt instanceof Date)) {
-      throw new Error('scheduledAt must be an ISO date string or Date');
+      throw new Error(SCHEDULED_AT_TYPE_MESSAGE);
     }
     const scheduledAtValidation = validateScheduleAdvance(scheduledAt, input._nowForTesting);
     if (!scheduledAtValidation.isValid) {

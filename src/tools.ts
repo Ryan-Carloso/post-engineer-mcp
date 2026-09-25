@@ -108,7 +108,7 @@ function parseArgsOrError<Input, Output>(
 
 export const GenerateVideoObject = z.object({
   personaId: z.string({ invalid_type_error: stringFieldMessage('personaId') }).trim().min(1, PERSONA_ID_REQUIRED_MESSAGE).optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
-  scriptPrompt: z.string({ invalid_type_error: stringFieldMessage('scriptPrompt') }).optional().describe('Optional specific prompt override for this video'),
+  scriptPrompt: z.string({ invalid_type_error: stringFieldMessage('scriptPrompt') }).trim().optional().describe('Optional specific prompt override for this video'),
   audioUrl: z
     .string({ invalid_type_error: stringFieldMessage('audioUrl') })
     .trim()
