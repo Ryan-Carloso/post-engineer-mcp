@@ -888,6 +888,23 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('rejects non-string values for every string field (single source of truth)', async () => {
+    global.fetch = vi.fn();
+    const cases: Array<[Record<string, unknown>, RegExp]> = [
+      [{ personaId: 42 }, /personaId must be a string/i],
+      [{ scriptPrompt: 42 }, /scriptPrompt must be a string/i],
+      [{ audioUrl: 42 }, /audioUrl must be a string/i],
+      [{ voiceId: 42 }, /voiceId must be a string/i],
+      [{ videoSubject: 42 }, /videoSubject must be a string/i],
+    ];
+    for (const [input, message] of cases) {
+      await expect(
+        client.generateVideoJob(input as unknown as GenerateVideoJobInput)
+      ).rejects.toThrow(message);
+    }
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('rejects a non-string scriptPrompt without calling API', async () => {
     global.fetch = vi.fn();
     await expect(

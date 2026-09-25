@@ -19,6 +19,7 @@ import {
   findProvidersMissingAccountIds,
   hasExactlyOneVoiceSource,
   isValidHttpUrl,
+  providerAccountIdsField,
   stringFieldMessage,
 } from './shared.js';
 import type { ProviderAccountIdsField } from './shared.js';
@@ -198,32 +199,26 @@ export const ScheduleProvidersSchema = z
  * compile if a provider is added without its account-ID field. Element
  * messages match the direct client's accountIdElementMessage wording.
  */
-const accountIdsShape = {
-  youtubeAccountIds: z
-    .array(z.string().trim().min(1, accountIdElementMessage('youtubeAccountIds')), {
-      invalid_type_error: accountIdFieldTypeMessage('youtubeAccountIds'),
+const accountIdFieldSchema = (field: ProviderAccountIdsField) =>
+  z
+    .array(z.string().trim().min(1, accountIdElementMessage(field)), {
+      invalid_type_error: accountIdFieldTypeMessage(field),
     })
     .optional()
-    .default([]),
-  instagramAccountIds: z
-    .array(z.string().trim().min(1, accountIdElementMessage('instagramAccountIds')), {
-      invalid_type_error: accountIdFieldTypeMessage('instagramAccountIds'),
-    })
-    .optional()
-    .default([]),
-  linkedinAccountIds: z
-    .array(z.string().trim().min(1, accountIdElementMessage('linkedinAccountIds')), {
-      invalid_type_error: accountIdFieldTypeMessage('linkedinAccountIds'),
-    })
-    .optional()
-    .default([]),
-  blueskyAccountIds: z
-    .array(z.string().trim().min(1, accountIdElementMessage('blueskyAccountIds')), {
-      invalid_type_error: accountIdFieldTypeMessage('blueskyAccountIds'),
-    })
-    .optional()
-    .default([]),
-} satisfies Record<ProviderAccountIdsField, z.ZodTypeAny>;
+    .default([]);
+
+// Generated from SCHEDULE_PROVIDER_NAMES so a new provider is added in one
+// place. Built with indexed assignment (not Object.fromEntries) so the
+// literal field keys survive in the type — fromEntries would widen to
+// {[k: string]: ...} and weaken every downstream type.
+const accountIdsShape: Record<ProviderAccountIdsField, z.ZodTypeAny> = {} as Record<
+  ProviderAccountIdsField,
+  z.ZodTypeAny
+>;
+for (const provider of SCHEDULE_PROVIDER_NAMES) {
+  const field = providerAccountIdsField(provider);
+  accountIdsShape[field] = accountIdFieldSchema(field);
+}
 
 export const ScheduleVideoObject = z.object({
   personaId: z.string({ invalid_type_error: stringFieldMessage('personaId') }).trim().min(1, PERSONA_ID_REQUIRED_MESSAGE),

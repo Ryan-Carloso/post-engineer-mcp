@@ -150,3 +150,8 @@ export function isValidHttpUrl(value: string): boolean {
     return false;
   }
 }
+
+/** e.g. 'Unknown provider "tiktok". Must be one of: youtube, instagram, linkedin, bluesky'. */
+export function unknownProviderMessage(provider: unknown): string {
+  return `Unknown provider ${JSON.stringify(provider)}. Must be one of: ${SCHEDULE_PROVIDER_NAMES.join(', ')}`;
+}

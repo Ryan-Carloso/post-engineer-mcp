@@ -24,6 +24,7 @@ import {
   providerAccountIdsField,
   stringFieldMessage,
   trimOptionalString,
+  unknownProviderMessage,
 } from './shared.js';
 
 export interface PostEngineerClientOptions {
@@ -329,40 +330,46 @@ export class PostEngineerClient {
     // silently flip the call to faceless mode; (2) the field-specific
     // messages match the schema's min(1) field rules, so both paths report
     // the same message for the same input.
-    for (const [name, value] of [
-      ['personaId', input.personaId],
-      ['scriptPrompt', input.scriptPrompt],
-      ['audioUrl', input.audioUrl],
-      ['voiceId', input.voiceId],
-      ['videoSubject', input.videoSubject],
-    ] as const) {
+    // Single source of truth for the string fields: the type-guard loop and
+    // the trim step below read the same object, so a future field can't be
+    // added to one but not the other — a missed field would let
+    // trimOptionalString silently coerce a non-string to undefined and flip
+    // the call's mode instead of erroring.
+    const rawFields = {
+      personaId: input.personaId,
+      scriptPrompt: input.scriptPrompt,
+      audioUrl: input.audioUrl,
+      voiceId: input.voiceId,
+      videoSubject: input.videoSubject,
+    };
+    for (const [name, value] of Object.entries(rawFields)) {
       if (value !== undefined && typeof value !== 'string') {
         throw new Error(stringFieldMessage(name));
       }
     }
-    if (typeof input.personaId === 'string' && input.personaId.trim() === '') {
+    if (typeof rawFields.personaId === 'string' && rawFields.personaId.trim() === '') {
       throw new Error(PERSONA_ID_REQUIRED_MESSAGE);
     }
-    if (input.voiceId !== undefined && input.voiceId.trim() === '') {
+    if (rawFields.voiceId !== undefined && rawFields.voiceId.trim() === '') {
       throw new Error(VOICE_ID_EMPTY_MESSAGE);
     }
-    if (input.audioUrl !== undefined && input.audioUrl.trim() === '') {
+    if (rawFields.audioUrl !== undefined && rawFields.audioUrl.trim() === '') {
       throw new Error(AUDIO_URL_EMPTY_MESSAGE);
     }
-    if (input.videoSubject !== undefined && input.videoSubject.trim() === '') {
+    if (rawFields.videoSubject !== undefined && rawFields.videoSubject.trim() === '') {
       // A blank videoSubject is only "required" in faceless mode; alongside
       // a persona it's an invalid override, so report that instead of the
       // faceless-worded shared message.
       throw new Error(
-        trimOptionalString(input.personaId) !== undefined
+        trimOptionalString(rawFields.personaId) !== undefined
           ? VIDEO_SUBJECT_NON_EMPTY_MESSAGE
           : VIDEO_SUBJECT_REQUIRED_MESSAGE
       );
     }
-    const personaId = trimOptionalString(input.personaId);
-    const audioUrl = trimOptionalString(input.audioUrl);
-    const voiceId = trimOptionalString(input.voiceId);
-    const videoSubject = trimOptionalString(input.videoSubject);
+    const personaId = trimOptionalString(rawFields.personaId);
+    const audioUrl = trimOptionalString(rawFields.audioUrl);
+    const voiceId = trimOptionalString(rawFields.voiceId);
+    const videoSubject = trimOptionalString(rawFields.videoSubject);
     // The web requires a non-empty video_subject for faceless generation;
     // fail fast here instead of failing server-side after passing voice
     // validation. Both faceless issues are reported together (joined), like
@@ -476,9 +483,7 @@ export class PostEngineerClient {
     for (const raw of input.providers) {
       const provider = typeof raw === 'string' ? raw.trim() : raw;
       if (!isScheduleProvider(provider)) {
-        throw new Error(
-          `Unknown provider ${JSON.stringify(provider)}. Must be one of: ${SCHEDULE_PROVIDER_NAMES.join(', ')}`
-        );
+        throw new Error(unknownProviderMessage(provider));
       }
       providers.push(provider);
     }
