@@ -102,6 +102,10 @@ describe('MCP Tool Handlers', () => {
 
     expect(response.isError).toBe(true);
     expect(response.content[0].text).toMatch(/audioUrl or voiceId/i);
+    // Form-level issue (path []) renders with no dangling "path: " prefix.
+    expect(response.content[0].text).toBe(
+      'Invalid arguments: Faceless generation requires exactly one of audioUrl or voiceId (or provide personaId)'
+    );
     expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
   });
 
@@ -113,7 +117,23 @@ describe('MCP Tool Handlers', () => {
     });
 
     expect(response.isError).toBe(true);
-    expect(response.content[0].text).toMatch(/exactly one/i);
+    expect(response.content[0].text).toBe(
+      'Invalid arguments: voiceId: Faceless generation needs exactly one of audioUrl or voiceId, not both'
+    );
+    expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
+  });
+
+  it('handleGenerateVideo returns an error when voiceId is used with a personaId', async () => {
+    vi.clearAllMocks();
+    const response = await handleGenerateVideo(mockClient, {
+      personaId: 'persona-123',
+      voiceId: 'voice-calm-1',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toBe(
+      'Invalid arguments: voiceId: voiceId is only used for faceless generation; remove voiceId when personaId is provided'
+    );
     expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
   });
 
@@ -147,12 +167,13 @@ describe('MCP Tool Handlers', () => {
       ).toThrow();
     });
 
-    it('accepts an optional voiceId alongside a personaId', () => {
-      const parsed = GenerateVideoSchema.parse({
-        personaId: 'persona-123',
-        voiceId: 'voice-calm-1',
-      });
-      expect(parsed.voiceId).toBe('voice-calm-1');
+    it('rejects a voiceId alongside a personaId', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          personaId: 'persona-123',
+          voiceId: 'voice-calm-1',
+        })
+      ).toThrow(/voiceId is only used for faceless generation/i);
     });
 
     it('rejects a call with no personaId, audioUrl, or voiceId', () => {
@@ -168,6 +189,15 @@ describe('MCP Tool Handlers', () => {
           voiceId: 'voice-calm-1',
         })
       ).toThrow(/exactly one/i);
+    });
+
+    it('rejects a non-http(s) audioUrl', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          personaId: 'persona-123',
+          audioUrl: 'ftp://cdn.example.com/a.mp3',
+        })
+      ).toThrow(/http\(s\)/i);
     });
 
     it('accepts faceless generation with only voiceId', () => {
@@ -391,7 +421,25 @@ describe('MCP Tool Handlers', () => {
     });
 
     expect(response.isError).toBe(true);
-    expect(response.content[0].text).toMatch(/blueskyAccountIds/i);
+    expect(response.content[0].text).toBe(
+      "Invalid arguments: blueskyAccountIds: providers includes 'bluesky' but blueskyAccountIds is empty"
+    );
+    expect(mockClient.createSchedule).not.toHaveBeenCalled();
+  });
+
+  it('handleScheduleVideo reports a duplicated provider only once', async () => {
+    vi.clearAllMocks();
+    const response = await handleScheduleVideo(mockClient, {
+      personaId: 'persona-123',
+      providers: ['youtube', 'youtube'],
+      youtubeAccountIds: [],
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toBe(
+      "Invalid arguments: youtubeAccountIds: providers includes 'youtube' but youtubeAccountIds is empty"
+    );
     expect(mockClient.createSchedule).not.toHaveBeenCalled();
   });
 

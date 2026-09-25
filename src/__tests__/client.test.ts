@@ -413,15 +413,30 @@ describe('PostEngineerClient', () => {
 
     const result = await client.generateVideoJob({
       voiceId: 'voice-calm-1',
-      audioUrl: 'https://cdn.example.com/narracao.mp3',
     });
 
     const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
     const payload = JSON.parse(fetchBody.body);
     expect(payload).not.toHaveProperty('personaId');
     expect(payload.voice_id).toBe('voice-calm-1');
-    expect(payload.audio_url).toBe('https://cdn.example.com/narracao.mp3');
     expect(result).toEqual(mockJob);
+  });
+
+  it('throws before the request for faceless generation with no voice source', async () => {
+    global.fetch = vi.fn();
+    await expect(client.generateVideoJob({})).rejects.toThrow(/exactly one of audioUrl or voiceId/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('throws before the request for faceless generation with both voice sources', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.generateVideoJob({
+        audioUrl: 'https://cdn.example.com/narracao.mp3',
+        voiceId: 'voice-calm-1',
+      })
+    ).rejects.toThrow(/exactly one of audioUrl or voiceId/i);
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('omits voice_id when a persona is used (the server ignores it)', async () => {

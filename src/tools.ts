@@ -97,6 +97,7 @@ export const GenerateVideoObject = z.object({
   audioUrl: z
     .string()
     .url('audioUrl must be a valid URL')
+    .regex(/^https?:\/\//i, 'audioUrl must be an http(s) URL')
     .optional()
     .describe(
       `Public URL of custom audio for this video. With a persona it overrides the persona voice; for faceless generation provide ${FACELESS_VOICE_RULE}.`
@@ -106,7 +107,7 @@ export const GenerateVideoObject = z.object({
     .min(1)
     .optional()
     .describe(
-      `Voice ID for this video (see list_voices). Only used for faceless generation (ignored when personaId is provided); for faceless generation provide ${FACELESS_VOICE_RULE}.`
+      `Voice ID for this video (see list_voices). Only used for faceless generation (rejected when personaId is provided); for faceless generation provide ${FACELESS_VOICE_RULE}.`
     ),
 });
 
@@ -126,22 +127,37 @@ export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) =>
       path: ['voiceId'],
     });
   }
+  if (val.personaId && val.voiceId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'voiceId is only used for faceless generation; remove voiceId when personaId is provided',
+      path: ['voiceId'],
+    });
+  }
 });
 
 export const GetVideoStatusSchema = z.object({
   taskId: z.string().min(1, 'taskId is required'),
 });
 
+/**
+ * Single source of truth for the schedule providers. Adding a provider means
+ * adding one entry here; the schema, the account-ID field map, and the
+ * client's CreateScheduleInput type all derive from it.
+ */
+export const SCHEDULE_PROVIDER_NAMES = ['youtube', 'instagram', 'linkedin', 'bluesky'] as const;
+export type ScheduleProvider = (typeof SCHEDULE_PROVIDER_NAMES)[number];
+
 export const ScheduleProvidersSchema = z
-  .array(z.enum(['youtube', 'instagram', 'linkedin', 'bluesky']))
+  .array(z.enum(SCHEDULE_PROVIDER_NAMES))
   .min(1, 'At least one provider required');
 
-const SCHEDULE_ACCOUNT_IDS_FIELDS = {
+const SCHEDULE_ACCOUNT_IDS_FIELDS: Record<ScheduleProvider, `${ScheduleProvider}AccountIds`> = {
   youtube: 'youtubeAccountIds',
   instagram: 'instagramAccountIds',
   linkedin: 'linkedinAccountIds',
   bluesky: 'blueskyAccountIds',
-} as const;
+};
 
 export const ScheduleVideoObject = z.object({
   personaId: z.string().min(1, 'personaId is required'),
@@ -159,7 +175,7 @@ export const ScheduleVideoObject = z.object({
 });
 
 export const ScheduleVideoSchema = ScheduleVideoObject.superRefine((val, ctx) => {
-  for (const provider of val.providers) {
+  for (const provider of new Set(val.providers)) {
     const field = SCHEDULE_ACCOUNT_IDS_FIELDS[provider];
     if (val[field].length === 0) {
       ctx.addIssue({

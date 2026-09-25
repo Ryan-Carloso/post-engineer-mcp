@@ -1,4 +1,5 @@
 import { validateScheduleAdvance } from './validator.js';
+import type { ScheduleProvider } from './tools.js';
 
 export interface PostEngineerClientOptions {
   apiKey?: string;
@@ -43,7 +44,7 @@ export interface UpdatePersonaInput {
 
 export interface CreateScheduleInput {
   personaId: string;
-  providers: ('youtube' | 'instagram' | 'linkedin' | 'bluesky')[];
+  providers: ScheduleProvider[];
   youtubeAccountIds?: string[];
   instagramAccountIds?: string[];
   linkedinAccountIds?: string[];
@@ -286,6 +287,13 @@ export class PostEngineerClient {
   }
 
   async generateVideoJob(input: GenerateVideoJobInput): Promise<unknown> {
+    // Fail fast for direct (non-MCP) callers: the server requires exactly one
+    // voice source for faceless generation and rejects anything else.
+    if (!input.personaId && Boolean(input.audioUrl) === Boolean(input.voiceId)) {
+      throw new Error(
+        'Faceless generation requires exactly one of audioUrl or voiceId (or provide personaId)'
+      );
+    }
     const url = `${this.baseUrl}/api/persona/video-job`;
     const response = await fetch(url, {
       method: 'POST',
