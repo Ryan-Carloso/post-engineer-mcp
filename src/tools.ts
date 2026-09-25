@@ -1,6 +1,16 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { PostEngineerClient } from './client.js';
+import {
+  FACELESS_VOICE_MESSAGE,
+  FACELESS_VOICE_RULE,
+  PERSONA_VOICE_ID_MESSAGE,
+  SCHEDULE_PROVIDER_NAMES,
+  hasExactlyOneVoiceSource,
+  isValidHttpUrl,
+  providerAccountIdsField,
+} from './shared.js';
+import type { ProviderAccountIdsField } from './shared.js';
 
 export type McpToolResponse = CallToolResult;
 
@@ -87,35 +97,12 @@ function parseArgsOrError<Input, Output>(
   return { data: parsed.data };
 }
 
-/**
- * Shared wording for the faceless voice-source rule, used in schema messages
- * and field descriptions so they cannot drift apart.
- */
-export const FACELESS_VOICE_RULE = 'exactly one of audioUrl or voiceId';
-
-/** Full message for the faceless voice-source rule, shared with the client's fail-fast guard. */
-export const FACELESS_VOICE_MESSAGE = `Faceless generation requires ${FACELESS_VOICE_RULE} (or provide personaId)`;
-
-/** Message for voiceId supplied alongside personaId, shared with the client's fail-fast guard. */
-export const PERSONA_VOICE_ID_MESSAGE =
-  'voiceId is only used for faceless generation; remove voiceId when personaId is provided';
-
-/**
- * True when exactly one faceless voice source is provided (audioUrl xor voiceId).
- * Shared by the schema refinement and the client's fail-fast guard so the rule
- * cannot drift between the two.
- */
-export function hasExactlyOneVoiceSource(audioUrl?: string, voiceId?: string): boolean {
-  return Boolean(audioUrl) !== Boolean(voiceId);
-}
-
 export const GenerateVideoObject = z.object({
   personaId: z.string().min(1, 'personaId is required').optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
   scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
   audioUrl: z
     .string()
-    .url('audioUrl must be a valid URL')
-    .regex(/^https?:\/\//i, 'audioUrl must be an http(s) URL')
+    .refine(isValidHttpUrl, 'audioUrl must be an http(s) URL')
     .optional()
     .describe(
       'Public URL of custom audio for this video. With a persona it overrides the persona voice; for faceless generation, provide this or voiceId (not both).'
@@ -152,25 +139,25 @@ export const GetVideoStatusSchema = z.object({
   taskId: z.string().min(1, 'taskId is required'),
 });
 
-/**
- * Single source of truth for the schedule providers. Adding a provider means
- * adding one entry here; the schema, the account-ID field map, and the
- * client's CreateScheduleInput type all derive from it.
- */
-export const SCHEDULE_PROVIDER_NAMES = ['youtube', 'instagram', 'linkedin', 'bluesky'] as const;
-export type ScheduleProvider = (typeof SCHEDULE_PROVIDER_NAMES)[number];
-
 export const ScheduleProvidersSchema = z
   .array(z.enum(SCHEDULE_PROVIDER_NAMES))
   .min(1, 'At least one provider required');
 
-export const ScheduleVideoObject = z.object({
-  personaId: z.string().min(1, 'personaId is required'),
-  providers: ScheduleProvidersSchema.describe('Target social platforms'),
+/**
+ * Account-ID fields, one per provider. The mapped type makes adding a provider
+ * to SCHEDULE_PROVIDER_NAMES a compile error until its field is added here.
+ */
+const accountIdsShape: { [K in ProviderAccountIdsField]: z.ZodTypeAny } = {
   youtubeAccountIds: z.array(z.string().min(1)).optional().default([]),
   instagramAccountIds: z.array(z.string().min(1)).optional().default([]),
   linkedinAccountIds: z.array(z.string().min(1)).optional().default([]),
   blueskyAccountIds: z.array(z.string().min(1)).optional().default([]),
+};
+
+export const ScheduleVideoObject = z.object({
+  personaId: z.string().min(1, 'personaId is required'),
+  providers: ScheduleProvidersSchema.describe('Target social platforms'),
+  ...accountIdsShape,
   scheduledAt: z.string().describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
   daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
   startHour: z.number().int().min(0).max(23).optional(),
@@ -181,9 +168,7 @@ export const ScheduleVideoObject = z.object({
 
 export const ScheduleVideoSchema = ScheduleVideoObject.superRefine((val, ctx) => {
   for (const provider of new Set(val.providers)) {
-    // Field names follow the `${provider}AccountIds` convention, so they are
-    // derived directly instead of maintained in a separate map.
-    const field = `${provider}AccountIds` as const;
+    const field = providerAccountIdsField(provider);
     if (val[field].length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

@@ -1,11 +1,13 @@
 import { validateScheduleAdvance } from './validator.js';
-import type { ScheduleProvider } from './tools.js';
+import type { ProviderAccountIdsField, ScheduleProvider } from './shared.js';
 import {
   FACELESS_VOICE_MESSAGE,
   PERSONA_VOICE_ID_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
   hasExactlyOneVoiceSource,
-} from './tools.js';
+  isValidHttpUrl,
+  providerAccountIdsField,
+} from './shared.js';
 
 export interface PostEngineerClientOptions {
   apiKey?: string;
@@ -48,13 +50,9 @@ export interface UpdatePersonaInput {
   niche?: string;
 }
 
-export interface CreateScheduleInput {
+export interface CreateScheduleInput extends Partial<Record<ProviderAccountIdsField, string[]>> {
   personaId: string;
   providers: ScheduleProvider[];
-  youtubeAccountIds?: string[];
-  instagramAccountIds?: string[];
-  linkedinAccountIds?: string[];
-  blueskyAccountIds?: string[];
   scheduledAt?: string | Date;
   daysOfWeek?: number[];
   startHour?: number;
@@ -302,6 +300,9 @@ export class PostEngineerClient {
     if (input.personaId && input.voiceId) {
       throw new Error(PERSONA_VOICE_ID_MESSAGE);
     }
+    if (input.audioUrl && !isValidHttpUrl(input.audioUrl)) {
+      throw new Error('audioUrl must be an http(s) URL');
+    }
     const url = `${this.baseUrl}/api/persona/video-job`;
     const response = await fetch(url, {
       method: 'POST',
@@ -343,6 +344,15 @@ export class PostEngineerClient {
       const validation = validateScheduleAdvance(input.scheduledAt, input._nowForTesting);
       if (!validation.isValid) {
         throw new Error(validation.error);
+      }
+    }
+
+    // Mirror the MCP schema's superRefine rule: every declared provider needs
+    // at least one account ID. Fail fast instead of hitting the server.
+    for (const provider of new Set(input.providers)) {
+      const field = providerAccountIdsField(provider);
+      if ((input[field] ?? []).length === 0) {
+        throw new Error(`providers includes '${provider}' but ${field} is empty`);
       }
     }
 

@@ -450,6 +450,14 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('throws when audioUrl is not an http(s) URL', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.generateVideoJob({ audioUrl: 'ftp://cdn.example.com/audio.mp3' })
+    ).rejects.toThrow(/http\(s\)/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('retrieves video task status', async () => {
     const mockStatus = {
       success: true,
@@ -473,8 +481,7 @@ describe('PostEngineerClient', () => {
     expect(result).toEqual(mockStatus);
   });
 
-  it('rejects schedule if target slot is less than 24h away without calling API', async () => {
-    global.fetch = vi.fn();
+  it('rejects schedule if target slot is less than 24h away without calling API', async () => {    global.fetch = vi.fn();
     const now = new Date('2026-09-18T09:00:00.000Z');
     const tooSoon = new Date('2026-09-18T18:00:00.000Z').toISOString();
 
@@ -487,6 +494,24 @@ describe('PostEngineerClient', () => {
         _nowForTesting: now,
       })
     ).rejects.toThrow(/at least 24 hours/i);
+
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects when a declared provider has no account IDs without calling API', async () => {
+    global.fetch = vi.fn();
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
+
+    await expect(
+      client.createSchedule({
+        personaId: 'persona-123',
+        providers: ['youtube', 'bluesky'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: validTime,
+        _nowForTesting: now,
+      })
+    ).rejects.toThrow(/blueskyAccountIds.*empty/i);
 
     expect(global.fetch).not.toHaveBeenCalled();
   });

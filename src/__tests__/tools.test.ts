@@ -123,6 +123,17 @@ describe('MCP Tool Handlers', () => {
     expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
   });
 
+  it('handleGenerateVideo returns an error for a non-http(s) audioUrl', async () => {
+    vi.clearAllMocks();
+    const response = await handleGenerateVideo(mockClient, {
+      audioUrl: 'ftp://cdn.example.com/narracao.mp3',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toMatch(/http\(s\)/i);
+    expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
+  });
+
   it('handleGenerateVideo returns an error when voiceId is used with a personaId', async () => {
     vi.clearAllMocks();
     const response = await handleGenerateVideo(mockClient, {
