@@ -105,7 +105,7 @@ export const ScheduleVideoBatchSchema = z.object(scheduleVideoBatchParams);
 // Validated shape of the backend's success response for POST /api/schedule/batch.
 export const ScheduleVideoBatchResponseSchema = z.object({
   scheduleId: z.string().min(1),
-  tokensSpent: z.number(),
+  tokensSpent: z.number().int().min(1),
   slots: z.array(
     z.object({
       topic: z.string(),

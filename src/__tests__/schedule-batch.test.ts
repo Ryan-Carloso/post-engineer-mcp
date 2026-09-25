@@ -177,6 +177,7 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://post-engineer.com/api/schedule/batch');
     expect(init.method).toBe('POST');
+    expect(init.signal).toBeInstanceOf(AbortSignal);
     const body = JSON.parse(init.body as string);
     expect(body).toEqual({
       personaId: 'persona-123',
@@ -576,7 +577,9 @@ describe('schedule_video_batch registration', () => {
     const scheduleVideoBatch = vi.fn().mockResolvedValue({ success: true, scheduleId: 'sched-1' });
     const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
     const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
-    const server = createPostEngineerMcpServer({ scheduleVideoBatch } as never);
+    const server = createPostEngineerMcpServer({
+      scheduleVideoBatch,
+    } as unknown as PostEngineerClient);
     const client = new Client({ name: 'test', version: '1.0.0' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
