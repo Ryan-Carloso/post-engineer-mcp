@@ -289,7 +289,9 @@ export class PostEngineerClient {
         personaId: input.personaId,
         video_script_prompt: input.scriptPrompt,
         audio_url: input.audioUrl,
-        voice_id: input.voiceId,
+        // voice_id is a faceless-generation voice source; the server ignores
+        // it when personaId is present, so don't send it then.
+        voice_id: input.personaId ? undefined : input.voiceId,
       }),
     });
 

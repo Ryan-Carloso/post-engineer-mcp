@@ -424,7 +424,7 @@ describe('PostEngineerClient', () => {
     expect(result).toEqual(mockJob);
   });
 
-  it('sends voice_id in the video job payload when a persona is used', async () => {
+  it('omits voice_id when a persona is used (the server ignores it)', async () => {
     const mockJob = {
       success: true,
       taskId: 'task-voice-3',
@@ -441,16 +441,10 @@ describe('PostEngineerClient', () => {
       voiceId: 'voice-calm-1',
     });
 
-    expect(global.fetch).toHaveBeenCalledWith(
-      `${baseUrl}/api/persona/video-job`,
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          personaId: 'persona-123',
-          voice_id: 'voice-calm-1',
-        }),
-      })
-    );
+    const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
+    const payload = JSON.parse(fetchBody.body);
+    expect(payload.personaId).toBe('persona-123');
+    expect(payload).not.toHaveProperty('voice_id');
     expect(result).toEqual(mockJob);
   });
 

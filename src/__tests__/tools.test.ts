@@ -94,6 +94,29 @@ describe('MCP Tool Handlers', () => {
     expect(response.content[0].text).toContain('task-audio-2');
   });
 
+  it('handleGenerateVideo returns an error when no voice source is provided', async () => {
+    vi.clearAllMocks();
+    const response = await handleGenerateVideo(mockClient, {
+      scriptPrompt: 'Top 3 AI coding assistants in 2026',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toMatch(/audioUrl or voiceId/i);
+    expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
+  });
+
+  it('handleGenerateVideo returns an error for faceless with both audioUrl and voiceId', async () => {
+    vi.clearAllMocks();
+    const response = await handleGenerateVideo(mockClient, {
+      audioUrl: 'https://cdn.example.com/narracao.mp3',
+      voiceId: 'voice-calm-1',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toMatch(/exactly one/i);
+    expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
+  });
+
   it('handleGenerateVideo passes faceless args (no personaId) through to the client', async () => {
     vi.mocked(mockClient.generateVideoJob).mockResolvedValue({
       success: true,
@@ -124,12 +147,33 @@ describe('MCP Tool Handlers', () => {
       ).toThrow();
     });
 
-    it('accepts an optional voiceId', () => {
+    it('accepts an optional voiceId alongside a personaId', () => {
       const parsed = GenerateVideoSchema.parse({
+        personaId: 'persona-123',
         voiceId: 'voice-calm-1',
-        audioUrl: 'https://cdn.example.com/narracao.mp3',
       });
       expect(parsed.voiceId).toBe('voice-calm-1');
+    });
+
+    it('rejects a call with no personaId, audioUrl, or voiceId', () => {
+      expect(() => GenerateVideoSchema.parse({ scriptPrompt: 'hello' })).toThrow(
+        /audioUrl or voiceId/i
+      );
+    });
+
+    it('rejects faceless generation with both audioUrl and voiceId', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          audioUrl: 'https://cdn.example.com/narracao.mp3',
+          voiceId: 'voice-calm-1',
+        })
+      ).toThrow(/exactly one/i);
+    });
+
+    it('accepts faceless generation with only voiceId', () => {
+      const parsed = GenerateVideoSchema.parse({ voiceId: 'voice-calm-1' });
+      expect(parsed.voiceId).toBe('voice-calm-1');
+      expect(parsed.personaId).toBeUndefined();
     });
   });
 
@@ -153,6 +197,37 @@ describe('MCP Tool Handlers', () => {
         scheduledAt: '2026-10-01T10:00:00.000Z',
       });
       expect(parsed.blueskyAccountIds).toEqual([]);
+    });
+
+    it("rejects 'bluesky' with empty blueskyAccountIds", () => {
+      expect(() =>
+        ScheduleVideoSchema.parse({
+          personaId: 'persona-123',
+          providers: ['bluesky'],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+        })
+      ).toThrow(/blueskyAccountIds/i);
+    });
+
+    it("rejects 'youtube' with empty youtubeAccountIds", () => {
+      expect(() =>
+        ScheduleVideoSchema.parse({
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+        })
+      ).toThrow(/youtubeAccountIds/i);
+    });
+
+    it('accepts each provider with its account IDs present', () => {
+      const parsed = ScheduleVideoSchema.parse({
+        personaId: 'persona-123',
+        providers: ['youtube', 'bluesky'],
+        youtubeAccountIds: ['yt-1'],
+        blueskyAccountIds: ['bsky-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      });
+      expect(parsed.providers).toEqual(['youtube', 'bluesky']);
     });
   });
 
@@ -293,6 +368,20 @@ describe('MCP Tool Handlers', () => {
 
     expect(response.isError).toBe(true);
     expect(response.content[0].text).toMatch(/at least 24 hours/i);
+  });
+
+  it('handleScheduleVideo returns an error when a provider has no account IDs', async () => {
+    vi.clearAllMocks();
+    const response = await handleScheduleVideo(mockClient, {
+      personaId: 'persona-123',
+      providers: ['bluesky'],
+      blueskyAccountIds: [],
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toMatch(/blueskyAccountIds/i);
+    expect(mockClient.createSchedule).not.toHaveBeenCalled();
   });
 
   it('handleConnectAccount returns the OAuth authorization URL with instructions', async () => {
