@@ -309,9 +309,10 @@ export class PostEngineerClient {
   }
 
   async generateVideoJob(input: GenerateVideoJobInput): Promise<unknown> {
-    // Untyped JS callers can pass null/undefined: property access below
-    // would throw a raw TypeError, so guard the input itself first.
-    if (typeof input !== 'object' || input === null) {
+    // Untyped JS callers can pass null/undefined (or an array): property
+    // access below would throw a raw TypeError, so guard the input itself
+    // first.
+    if (typeof input !== 'object' || input === null || Array.isArray(input)) {
       throw new Error(INPUT_OBJECT_MESSAGE);
     }
     // Fail fast for direct (non-MCP) callers, mirroring the MCP schema rules.
@@ -415,7 +416,8 @@ export class PostEngineerClient {
   async createSchedule(input: CreateScheduleInput): Promise<unknown> {
     // Same null/undefined guard as generateVideoJob: fail with a clear
     // message instead of a raw TypeError on the first property access.
-    if (typeof input !== 'object' || input === null) {
+    // Arrays are rejected too (typeof [] === 'object').
+    if (typeof input !== 'object' || input === null || Array.isArray(input)) {
       throw new Error(INPUT_OBJECT_MESSAGE);
     }
     // Mirror generateVideoJob's hardening: a blank or non-string personaId
@@ -438,9 +440,11 @@ export class PostEngineerClient {
     // "missing".
     const scheduledAt =
       typeof input.scheduledAt === 'string' ? input.scheduledAt.trim() : input.scheduledAt;
-    if (scheduledAt === undefined || scheduledAt === null || scheduledAt === '') {
+    if (scheduledAt === undefined || scheduledAt === '') {
       throw new Error(SCHEDULED_AT_REQUIRED_MESSAGE);
     }
+    // null is a supplied-but-wrong-typed value, not a missing one — it gets
+    // the type message, matching the schema's invalid_type_error.
     if (typeof scheduledAt !== 'string' && !(scheduledAt instanceof Date)) {
       throw new Error(SCHEDULED_AT_TYPE_MESSAGE);
     }

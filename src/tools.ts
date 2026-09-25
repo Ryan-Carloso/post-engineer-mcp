@@ -204,9 +204,13 @@ export const ScheduleProvidersSchema = z.preprocess(
  */
 const accountIdFieldSchema = (field: ProviderAccountIdsField) =>
   z
-    .array(z.string().trim().min(1, accountIdElementMessage(field)), {
-      invalid_type_error: accountIdFieldTypeMessage(field),
-    })
+    .array(
+      z
+        .string({ invalid_type_error: accountIdElementMessage(field) })
+        .trim()
+        .min(1, accountIdElementMessage(field)),
+      { invalid_type_error: accountIdFieldTypeMessage(field) }
+    )
     .optional()
     .default([]);
 

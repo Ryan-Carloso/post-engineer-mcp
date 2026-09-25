@@ -442,6 +442,14 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('rejects an array input with the object message, not a per-field error', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.generateVideoJob([] as unknown as GenerateVideoJobInput)
+    ).rejects.toThrow(/input must be an object/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('throws before the request for faceless generation with no videoSubject', async () => {
     global.fetch = vi.fn();
     await expect(
@@ -1010,6 +1018,30 @@ describe('PostEngineerClient', () => {
     await expect(
       client.createSchedule(null as unknown as CreateScheduleInput)
     ).rejects.toThrow(/input must be an object/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects an array input with the object message, not a per-field error', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.createSchedule([] as unknown as CreateScheduleInput)
+    ).rejects.toThrow(/input must be an object/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a null scheduledAt with a type error, not a presence error', async () => {
+    global.fetch = vi.fn();
+    const error = await client
+      .createSchedule({
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: null as unknown as string,
+      })
+      .catch((e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toMatch(/scheduledAt must be an ISO date string or Date/i);
+    expect(error.message).not.toMatch(/is required/i);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
