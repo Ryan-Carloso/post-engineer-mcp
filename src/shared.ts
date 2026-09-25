@@ -15,9 +15,16 @@ export function providerAccountIdsField(provider: ScheduleProvider): ProviderAcc
   return `${provider}AccountIds`;
 }
 
-/** Human-readable provider label, e.g. 'youtube' -> 'Youtube'. */
+/** Human-readable provider label with brand-correct casing, shown to LLM callers. */
+const PROVIDER_DISPLAY_NAMES: Record<ScheduleProvider, string> = {
+  youtube: 'YouTube',
+  instagram: 'Instagram',
+  linkedin: 'LinkedIn',
+  bluesky: 'Bluesky',
+};
+
 export function providerDisplayName(provider: ScheduleProvider): string {
-  return provider[0].toUpperCase() + provider.slice(1);
+  return PROVIDER_DISPLAY_NAMES[provider];
 }
 
 /** Type guard for untyped callers: is this a known schedule provider? */

@@ -304,6 +304,13 @@ export class PostEngineerClient {
     // schema's min(1) field rules); non-string values from untyped JS
     // callers get a clear error instead of a TypeError. The server rejects
     // invalid combinations.
+    //
+    // Why the explicit per-field blank checks instead of relying on
+    // trimOptionalString + the rule guards below: (1) a blank personaId
+    // must be rejected, not normalized to undefined — normalizing would
+    // silently flip the call to faceless mode; (2) the field-specific
+    // messages match the schema's min(1) field rules, so both paths report
+    // the same message for the same input.
     for (const [name, value] of [
       ['personaId', input.personaId],
       ['audioUrl', input.audioUrl],
@@ -321,7 +328,7 @@ export class PostEngineerClient {
       throw new Error('voiceId must not be empty');
     }
     if (input.audioUrl !== undefined && input.audioUrl.trim() === '') {
-      throw new Error('audioUrl must be an http(s) URL');
+      throw new Error('audioUrl must not be empty');
     }
     if (input.videoSubject !== undefined && input.videoSubject.trim() === '') {
       throw new Error('videoSubject is required for faceless generation');
@@ -415,7 +422,7 @@ export class PostEngineerClient {
       const provider = typeof raw === 'string' ? raw.trim() : raw;
       if (!isScheduleProvider(provider)) {
         throw new Error(
-          `Unknown provider '${String(provider)}'. Must be one of: ${SCHEDULE_PROVIDER_NAMES.join(', ')}`
+          `Unknown provider ${JSON.stringify(provider)}. Must be one of: ${SCHEDULE_PROVIDER_NAMES.join(', ')}`
         );
       }
       providers.push(provider);

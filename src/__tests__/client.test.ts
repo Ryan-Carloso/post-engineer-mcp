@@ -567,11 +567,11 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('rejects a blank audioUrl', async () => {
+  it('rejects a blank audioUrl with an empty message, not a protocol message', async () => {
     global.fetch = vi.fn();
     await expect(
       client.generateVideoJob({ audioUrl: '   ' })
-    ).rejects.toThrow(/http\(s\)/i);
+    ).rejects.toThrow(/audioUrl must not be empty/i);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
@@ -660,7 +660,7 @@ describe('PostEngineerClient', () => {
         providers: ['tiktok' as unknown as 'youtube'],
         tiktokAccountIds: ['tt-1'],
       } as never)
-    ).rejects.toThrow(/Unknown provider 'tiktok'/i);
+    ).rejects.toThrow(/Unknown provider "tiktok"/i);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 

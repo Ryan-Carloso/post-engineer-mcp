@@ -103,6 +103,7 @@ export const GenerateVideoObject = z.object({
   audioUrl: z
     .string()
     .trim()
+    .min(1, 'audioUrl must not be empty')
     .refine(isValidHttpUrl, 'audioUrl must be an http(s) URL')
     .optional()
     .describe(
