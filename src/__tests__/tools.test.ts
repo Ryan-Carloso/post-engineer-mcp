@@ -332,7 +332,22 @@ describe('MCP Tool Handlers', () => {
       );
     });
 
-    it('dedupes providers in the schema, matching the direct client', () => {
+    it('reports non-array providers with the shared type message, like the client', () => {
+    const result = ScheduleVideoSchema.safeParse({
+      personaId: 'persona-123',
+      providers: 'youtube',
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+    });
+    expect(result.success).toBe(false);
+    if (result.success) {
+      return;
+    }
+    expect(result.error.issues[0]?.message).toBe(
+      'providers must be an array of provider names'
+    );
+  });
+
+  it('dedupes providers in the schema, matching the direct client', () => {
       const parsed = ScheduleVideoSchema.parse({
         personaId: 'persona-123',
         providers: ['youtube', 'youtube', ' instagram '],

@@ -6,6 +6,7 @@ import {
   AUDIO_URL_INVALID_MESSAGE,
   PERSONA_ID_REQUIRED_MESSAGE,
   PROVIDERS_REQUIRED_MESSAGE,
+  PROVIDERS_TYPE_MESSAGE,
   SCHEDULED_AT_REQUIRED_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
   VOICE_ID_EMPTY_MESSAGE,
@@ -172,16 +173,18 @@ export const ScheduleProvidersSchema = z.preprocess(
               ? unknownProviderMessage(ctx.data)
               : ctx.defaultError,
         }),
-      })
+      }),
+      // Same wording as the direct client's non-array guard, so both layers
+      // report the same message for the same input.
+      { invalid_type_error: PROVIDERS_TYPE_MESSAGE }
     )
     .min(1, PROVIDERS_REQUIRED_MESSAGE)
 );
 
 /**
- * Account-ID fields, one per provider. `satisfies` keeps the precise field
- * types (so z.infer resolves string[], not any) while still failing to
- * compile if a provider is added without its account-ID field. Element
- * messages match the direct client's accountIdElementMessage wording.
+ * Account-ID fields, one per provider. Element messages match the direct
+ * client's accountIdElementMessage wording, and the array's
+ * invalid_type_error matches accountIdFieldTypeMessage.
  */
 const accountIdFieldSchema = (field: ProviderAccountIdsField) =>
   z
@@ -194,7 +197,11 @@ const accountIdFieldSchema = (field: ProviderAccountIdsField) =>
 // Generated from SCHEDULE_PROVIDER_NAMES so a new provider is added in one
 // place. Built with indexed assignment (not Object.fromEntries) so the
 // literal field keys survive in the type — fromEntries would widen to
-// {[k: string]: ...} and weaken every downstream type.
+// {[k: string]: ...} and weaken every downstream type. The `as` cast is sound:
+// the loop below iterates every SCHEDULE_PROVIDER_NAMES entry and the field
+// names are derived (providerAccountIdsField), not hand-written, so there is
+// no field to misspell or omit — completeness follows from the single
+// source of truth.
 const accountIdsShape: Record<ProviderAccountIdsField, z.ZodTypeAny> = {} as Record<
   ProviderAccountIdsField,
   z.ZodTypeAny

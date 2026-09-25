@@ -822,14 +822,31 @@ describe('PostEngineerClient', () => {
     expect(payload.timezone).toBe('America/Sao_Paulo');
   });
 
-  it('rejects when providers is omitted without calling API', async () => {
+  it('rejects non-array providers with the type message, like the schema', async () => {
+    global.fetch = vi.fn();
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
+    for (const providers of [undefined, 'youtube']) {
+      await expect(
+        client.createSchedule({
+          personaId: 'persona-123',
+          providers: providers as unknown as [],
+          scheduledAt: validTime,
+          _nowForTesting: now,
+        })
+      ).rejects.toThrow(/providers must be an array of provider names/i);
+    }
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects empty providers without calling API', async () => {
     global.fetch = vi.fn();
     const now = new Date('2026-09-18T09:00:00.000Z');
     const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
     await expect(
       client.createSchedule({
         personaId: 'persona-123',
-        providers: undefined as unknown as [],
+        providers: [],
         scheduledAt: validTime,
         _nowForTesting: now,
       })

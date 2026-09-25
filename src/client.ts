@@ -6,6 +6,7 @@ import {
   INPUT_OBJECT_MESSAGE,
   PERSONA_ID_REQUIRED_MESSAGE,
   PROVIDERS_REQUIRED_MESSAGE,
+  PROVIDERS_TYPE_MESSAGE,
   SCHEDULED_AT_REQUIRED_MESSAGE,
   SCHEDULED_AT_TYPE_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
@@ -329,10 +330,7 @@ export class PostEngineerClient {
     }
     // Normalize once, then validate the normalized values. Blank stays ''
     // here (not coerced to undefined) so the checks below can distinguish
-    // "provided but blank" from "omitted". Named trimKeepBlank (not trim) to
-    // keep it distinct from the shared trimOptionalString, which maps blank
-    // to undefined — unifying them would silently break the
-    // provided-but-blank detection below.
+    // "provided but blank" from "omitted".
     const trimKeepBlank = (value: string | undefined): string | undefined => value?.trim();
     const personaId = trimKeepBlank(rawFields.personaId);
     const scriptPrompt = trimKeepBlank(rawFields.scriptPrompt);
@@ -444,8 +442,12 @@ export class PostEngineerClient {
     // hitting the server (or throwing a TypeError). The per-provider
     // account-ID rule itself lives in shared validateScheduleFields; the
     // shape checks below are untyped-JS-caller hardening that zod handles
-    // on the MCP path.
-    if (!Array.isArray(input.providers) || input.providers.length === 0) {
+    // on the MCP path. A non-array is a type error (same message as the
+    // schema's invalid_type_error), an empty array is "none given".
+    if (!Array.isArray(input.providers)) {
+      throw new Error(PROVIDERS_TYPE_MESSAGE);
+    }
+    if (input.providers.length === 0) {
       throw new Error(PROVIDERS_REQUIRED_MESSAGE);
     }
     // Trim provider names before the membership check: ' youtube ' is

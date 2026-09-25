@@ -53,6 +53,8 @@ export function accountIdFieldTypeMessage(field: ProviderAccountIdsField): strin
 }
 
 export const PROVIDERS_REQUIRED_MESSAGE = 'At least one provider required';
+/** Non-array providers from untyped callers — distinct from "none given". */
+export const PROVIDERS_TYPE_MESSAGE = 'providers must be an array of provider names';
 export const SCHEDULED_AT_REQUIRED_MESSAGE =
   'scheduledAt is required (ISO date time, between 24h and 30 days in the future)';
 
@@ -156,19 +158,6 @@ export function hasExactlyOneVoiceSource(audioUrl?: string, voiceId?: string): b
   return Boolean(audioUrl) !== Boolean(voiceId);
 }
 
-/**
- * Trim an optional free-text input. Blank strings normalize to undefined
- * (absent). Non-string values also coerce to undefined, so this is
- * normalization only, not validation — callers must reject non-strings
- * beforehand (the client's type-guard loop and the schema's
- * invalid_type_error do this) to get a clear error instead of silent
- * coercion.
- */
-export function trimOptionalString(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  return trimmed === '' ? undefined : trimmed;
-}
 
 /**
  * Mirrors the schema's audioUrl rule: must be a parseable http(s) URL.
