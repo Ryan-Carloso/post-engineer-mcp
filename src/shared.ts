@@ -15,6 +15,36 @@ export function providerAccountIdsField(provider: ScheduleProvider): ProviderAcc
   return `${provider}AccountIds`;
 }
 
+export interface ProviderAccountIssue {
+  provider: ScheduleProvider;
+  field: ProviderAccountIdsField;
+  message: string;
+}
+
+/**
+ * The shared per-provider account-ID rule: every declared provider needs at
+ * least one account ID. Called by the schema's superRefine and by the
+ * client's fail-fast guard so the rule (and its message) cannot drift
+ * between the two layers.
+ */
+export function findProvidersMissingAccountIds(
+  providers: readonly ScheduleProvider[],
+  getAccountIds: (field: ProviderAccountIdsField) => readonly string[] | undefined
+): ProviderAccountIssue[] {
+  const issues: ProviderAccountIssue[] = [];
+  for (const provider of new Set(providers)) {
+    const field = providerAccountIdsField(provider);
+    if ((getAccountIds(field) ?? []).length === 0) {
+      issues.push({
+        provider,
+        field,
+        message: `providers includes '${provider}' but ${field} is empty`,
+      });
+    }
+  }
+  return issues;
+}
+
 /** Shared wording for the faceless voice-source rule. */
 export const FACELESS_VOICE_RULE = 'exactly one of audioUrl or voiceId';
 

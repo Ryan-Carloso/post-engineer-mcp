@@ -491,15 +491,31 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('treats a blank voiceId as not provided', async () => {
+  it('rejects a blank voiceId instead of treating it as absent', async () => {
     global.fetch = vi.fn();
     await expect(
       client.generateVideoJob({ voiceId: '   ' })
-    ).rejects.toThrow(/exactly one of audioUrl or voiceId/i);
+    ).rejects.toThrow(/voiceId must not be empty/i);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('trims whitespace around the voice sources before validating', async () => {
+  it('rejects a blank voiceId alongside personaId instead of dropping it', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.generateVideoJob({ personaId: 'persona-123', voiceId: '   ' })
+    ).rejects.toThrow(/voiceId must not be empty/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a blank audioUrl', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.generateVideoJob({ audioUrl: '   ' })
+    ).rejects.toThrow(/http\(s\)/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('trims whitespace around the audioUrl before validating', async () => {
     const mockJob = { success: true, taskId: 'task-trim-1' };
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -509,13 +525,11 @@ describe('PostEngineerClient', () => {
 
     const result = await client.generateVideoJob({
       audioUrl: '  https://cdn.example.com/a.mp3  ',
-      voiceId: '   ',
     });
 
     const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
     const payload = JSON.parse(fetchBody.body);
     expect(payload.audio_url).toBe('https://cdn.example.com/a.mp3');
-    expect(payload).not.toHaveProperty('voice_id');
     expect(result).toEqual(mockJob);
   });
 
@@ -573,6 +587,18 @@ describe('PostEngineerClient', () => {
       })
     ).rejects.toThrow(/blueskyAccountIds.*empty/i);
 
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown provider without calling API', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.createSchedule({
+        personaId: 'persona-123',
+        providers: ['tiktok' as unknown as 'youtube'],
+        tiktokAccountIds: ['tt-1'],
+      } as never)
+    ).rejects.toThrow(/Unknown provider 'tiktok'/i);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 

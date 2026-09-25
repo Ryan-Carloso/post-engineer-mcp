@@ -6,9 +6,9 @@ import {
   FACELESS_VOICE_MESSAGE,
   PERSONA_VOICE_ID_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
+  findProvidersMissingAccountIds,
   hasExactlyOneVoiceSource,
   isValidHttpUrl,
-  providerAccountIdsField,
 } from './shared.js';
 import type { ProviderAccountIdsField } from './shared.js';
 
@@ -109,6 +109,7 @@ export const GenerateVideoObject = z.object({
     ),
   voiceId: z
     .string()
+    .trim()
     .min(1)
     .optional()
     .describe(
@@ -169,15 +170,15 @@ export const ScheduleVideoObject = z.object({
 });
 
 export const ScheduleVideoSchema = ScheduleVideoObject.superRefine((val, ctx) => {
-  for (const provider of new Set(val.providers)) {
-    const field = providerAccountIdsField(provider);
-    if (val[field].length === 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `providers includes '${provider}' but ${field} is empty`,
-        path: [field],
-      });
-    }
+  // The per-provider account-ID rule lives in shared
+  // findProvidersMissingAccountIds so it cannot drift from the client's
+  // fail-fast guard.
+  for (const issue of findProvidersMissingAccountIds(val.providers, (field) => val[field])) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: issue.message,
+      path: [issue.field],
+    });
   }
 });
 

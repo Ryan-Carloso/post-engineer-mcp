@@ -5,6 +5,7 @@ import {
   FACELESS_VOICE_MESSAGE,
   PERSONA_VOICE_ID_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
+  findProvidersMissingAccountIds,
   hasExactlyOneVoiceSource,
   isValidHttpUrl,
   providerAccountIdsField,
@@ -296,13 +297,10 @@ export class PostEngineerClient {
     // Fail fast for direct (non-MCP) callers, mirroring the MCP schema rules:
     // faceless generation needs exactly one voice source, and voiceId is
     // rejected alongside personaId. Blank strings are invalid input, not
-    // absent values: a blank personaId is rejected (not treated as faceless),
-    // and blank voice sources count as not provided. Non-string values from
-    // untyped JS callers are treated as absent so they surface as validation
-    // errors instead of TypeErrors. The server rejects invalid combinations.
-    // Non-string values from untyped JS callers get a clear error, not a
-    // TypeError on .trim() — and a mistyped personaId must not silently flip
-    // the call into faceless mode.
+    // absent values (a blank personaId/voiceId/audioUrl is rejected, matching
+    // the schema's min(1) field rules); non-string values from untyped JS
+    // callers get a clear error instead of a TypeError. The server rejects
+    // invalid combinations.
     for (const [name, value] of [
       ['personaId', input.personaId],
       ['audioUrl', input.audioUrl],
@@ -314,6 +312,12 @@ export class PostEngineerClient {
     }
     if (typeof input.personaId === 'string' && input.personaId.trim() === '') {
       throw new Error('personaId is required');
+    }
+    if (input.voiceId !== undefined && input.voiceId.trim() === '') {
+      throw new Error('voiceId must not be empty');
+    }
+    if (input.audioUrl !== undefined && input.audioUrl.trim() === '') {
+      throw new Error('audioUrl must be an http(s) URL');
     }
     const personaId = trimOptionalString(input.personaId);
     const audioUrl = trimOptionalString(input.audioUrl);
@@ -374,21 +378,39 @@ export class PostEngineerClient {
       }
     }
 
-    // Mirror the MCP schema's superRefine rule: providers must be a non-empty
-    // array, and every declared provider needs at least one account ID. Fail
-    // fast instead of hitting the server (or throwing a TypeError).
+    // Mirror the MCP schema's superRefine rules and fail fast instead of
+    // hitting the server (or throwing a TypeError). The per-provider
+    // account-ID rule itself lives in shared findProvidersMissingAccountIds;
+    // the extra shape checks below are untyped-JS-caller hardening that zod
+    // handles on the MCP path.
     if (!Array.isArray(input.providers) || input.providers.length === 0) {
       throw new Error('providers must be a non-empty array');
+    }
+    for (const provider of input.providers) {
+      if (!(SCHEDULE_PROVIDER_NAMES as readonly string[]).includes(provider)) {
+        throw new Error(
+          `Unknown provider '${String(provider)}'. Must be one of: ${SCHEDULE_PROVIDER_NAMES.join(', ')}`
+        );
+      }
+    }
+    const missingAccountIds = findProvidersMissingAccountIds(input.providers, (field) => {
+      const ids = input[field];
+      return Array.isArray(ids) ? ids : undefined;
+    });
+    if (missingAccountIds.length > 0) {
+      throw new Error(missingAccountIds[0].message);
     }
     for (const provider of new Set(input.providers)) {
       const field = providerAccountIdsField(provider);
       const ids = input[field];
-      if (!Array.isArray(ids) || ids.length === 0) {
-        throw new Error(`providers includes '${provider}' but ${field} is empty`);
-      }
-      for (const id of ids) {
-        if (typeof id !== 'string' || id.trim() === '') {
-          throw new Error(`${field} must contain only non-empty strings`);
+      // Note: like the schema's array(z.string().min(1)), padded IDs (' a ')
+      // pass validation here; both paths converge on trimmed IDs in the
+      // payload builder below.
+      if (Array.isArray(ids)) {
+        for (const id of ids) {
+          if (typeof id !== 'string' || id.trim() === '') {
+            throw new Error(`${field} must contain only non-empty strings`);
+          }
         }
       }
     }
