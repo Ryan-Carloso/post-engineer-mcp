@@ -52,7 +52,7 @@ export interface CreateScheduleInput {
   _nowForTesting?: Date;
 }
 
-// Single source of truth: derived from the strict zod schema in tools.ts
+// Single source of truth: derived from the strict zod schema in schemas.ts
 // so the client payload can never drift from MCP-boundary validation.
 export type ScheduleVideoBatchInput = z.infer<typeof ScheduleVideoBatchSchema>;
 
