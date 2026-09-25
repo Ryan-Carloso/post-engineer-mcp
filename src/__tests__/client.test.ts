@@ -649,6 +649,16 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('reports the audioUrl error before the voiceId error, matching the schema field order', async () => {
+    global.fetch = vi.fn();
+    const error = await client
+      .generateVideoJob({ audioUrl: '   ', voiceId: '   ' })
+      .catch((e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toMatch(/audioUrl must not be empty/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('trims whitespace around the audioUrl before validating', async () => {
     const mockJob = { success: true, taskId: 'task-trim-1' };
     global.fetch = vi.fn().mockResolvedValue({

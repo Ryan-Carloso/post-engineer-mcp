@@ -312,7 +312,7 @@ export class PostEngineerClient {
     // Untyped JS callers can pass null/undefined (or an array): property
     // access below would throw a raw TypeError, so guard the input itself
     // first.
-    assertInputObject(input);
+    assertInputObject<GenerateVideoJobInput>(input);
     // Fail fast for direct (non-MCP) callers, mirroring the MCP schema rules.
     // Single source of truth for the string fields: the type-guard loop and
     // the normalize step read the same object, so a future field can't be
@@ -345,11 +345,14 @@ export class PostEngineerClient {
     if (personaId === '') {
       throw new Error(PERSONA_ID_REQUIRED_MESSAGE);
     }
-    if (voiceId === '') {
-      throw new Error(VOICE_ID_EMPTY_MESSAGE);
-    }
+    // audioUrl before voiceId, matching GenerateVideoObject's field order
+    // (personaId, scriptPrompt, audioUrl, voiceId, videoSubject) so both
+    // layers report the same first error for the same input.
     if (audioUrl === '') {
       throw new Error(AUDIO_URL_EMPTY_MESSAGE);
+    }
+    if (voiceId === '') {
+      throw new Error(VOICE_ID_EMPTY_MESSAGE);
     }
     // Field-level URL check runs before the cross-field rules, mirroring the
     // schema: its refine runs during object parsing, before superRefine. An
@@ -414,7 +417,7 @@ export class PostEngineerClient {
   async createSchedule(input: CreateScheduleInput): Promise<unknown> {
     // Same guard as generateVideoJob: fail with a clear message instead of
     // a raw TypeError on the first property access.
-    assertInputObject(input);
+    assertInputObject<CreateScheduleInput>(input);
     // Mirror generateVideoJob's hardening: a blank or non-string personaId
     // fails fast here instead of server-side. Presence and type get
     // separate messages — a supplied-but-wrong-typed value is not

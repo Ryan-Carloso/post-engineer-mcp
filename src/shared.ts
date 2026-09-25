@@ -74,7 +74,7 @@ export const INPUT_OBJECT_MESSAGE = 'input must be an object';
  * and property access below would throw a raw TypeError. Shared so both
  * methods reject non-objects with the same message.
  */
-export function assertInputObject(input: unknown): asserts input is object {
+export function assertInputObject<T extends object>(input: unknown): asserts input is T {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
     throw new Error(INPUT_OBJECT_MESSAGE);
   }

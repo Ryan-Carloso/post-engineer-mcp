@@ -8,6 +8,7 @@ import {
   PROVIDERS_REQUIRED_MESSAGE,
   PROVIDERS_TYPE_MESSAGE,
   SCHEDULED_AT_REQUIRED_MESSAGE,
+  SCHEDULED_AT_TYPE_MESSAGE,
   SCHEDULE_WINDOW_BOUNDS,
   TIMEZONE_EMPTY_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
@@ -235,7 +236,11 @@ export const ScheduleVideoObject = z.object({
   personaId: z.string({ invalid_type_error: stringFieldMessage('personaId') }).trim().min(1, PERSONA_ID_REQUIRED_MESSAGE),
   providers: ScheduleProvidersSchema.describe('Target social platforms'),
   ...accountIdsShape,
-  scheduledAt: z.string({ invalid_type_error: stringFieldMessage('scheduledAt') }).trim().min(1, SCHEDULED_AT_REQUIRED_MESSAGE).describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
+  // Wrong-typed scheduledAt reports the client's type message (not the
+  // string-only wording): the MCP transport serializes to JSON, so a Date
+  // never reaches this chain in practice, and both layers name the same
+  // accepted shapes.
+  scheduledAt: z.string({ invalid_type_error: SCHEDULED_AT_TYPE_MESSAGE }).trim().min(1, SCHEDULED_AT_REQUIRED_MESSAGE).describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
   // Window bounds and messages are shared with the direct client's
   // fail-fast guards (SCHEDULE_WINDOW_BOUNDS / scheduleWindowMessage), so
   // both layers enforce and report the same values.
@@ -267,7 +272,7 @@ export const ScheduleVideoObject = z.object({
     .min(SCHEDULE_WINDOW_BOUNDS.postsPerDay.min, scheduleWindowMessage('postsPerDay'))
     .max(SCHEDULE_WINDOW_BOUNDS.postsPerDay.max, scheduleWindowMessage('postsPerDay'))
     .optional(),
-  timezone: z.string().trim().min(1, TIMEZONE_EMPTY_MESSAGE).optional().default('UTC'),
+  timezone: z.string({ invalid_type_error: stringFieldMessage('timezone') }).trim().min(1, TIMEZONE_EMPTY_MESSAGE).optional().default('UTC'),
 });
 
 export const ScheduleVideoSchema = ScheduleVideoObject.superRefine((val, ctx) => {

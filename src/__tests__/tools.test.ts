@@ -242,6 +242,29 @@ describe('MCP Tool Handlers', () => {
       ).toThrow(/videoSubject must be a non-empty string when provided/i);
     });
 
+    it('reports a wrong-typed scheduledAt with the shared type message, not zod’s default', () => {
+      expect(() =>
+        ScheduleVideoSchema.parse({
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          youtubeAccountIds: ['yt-1'],
+          scheduledAt: null as unknown as string,
+        })
+      ).toThrow(/scheduledAt must be an ISO date string or Date/i);
+    });
+
+    it('reports a wrong-typed timezone with the shared message, not zod’s default', () => {
+      expect(() =>
+        ScheduleVideoSchema.parse({
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          youtubeAccountIds: ['yt-1'],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+          timezone: null as unknown as string,
+        })
+      ).toThrow(/timezone must be a string/i);
+    });
+
     it('reports a non-array account-ID field with the shared message, not zod’s default', () => {
       expect(() =>
         ScheduleVideoSchema.parse({
