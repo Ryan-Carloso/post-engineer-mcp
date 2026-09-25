@@ -85,6 +85,12 @@ function parseArgsOrError<Input, Output>(
   return { data: parsed.data };
 }
 
+/**
+ * Shared wording for the faceless voice-source rule, used in schema messages
+ * and field descriptions so they cannot drift apart.
+ */
+export const FACELESS_VOICE_RULE = 'exactly one of audioUrl or voiceId';
+
 export const GenerateVideoObject = z.object({
   personaId: z.string().min(1, 'personaId is required').optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
   scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
@@ -92,27 +98,31 @@ export const GenerateVideoObject = z.object({
     .string()
     .url('audioUrl must be a valid URL')
     .optional()
-    .describe('Public URL of custom audio for this video. With a persona it overrides the persona voice; for faceless generation provide exactly one of audioUrl or voiceId.'),
+    .describe(
+      `Public URL of custom audio for this video. With a persona it overrides the persona voice; for faceless generation provide ${FACELESS_VOICE_RULE}.`
+    ),
   voiceId: z
     .string()
     .min(1)
     .optional()
-    .describe('Voice ID for this video (see list_voices). Only used for faceless generation (ignored when personaId is provided); for faceless generation provide exactly one of audioUrl or voiceId.'),
+    .describe(
+      `Voice ID for this video (see list_voices). Only used for faceless generation (ignored when personaId is provided); for faceless generation provide ${FACELESS_VOICE_RULE}.`
+    ),
 });
 
 export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) => {
   if (!val.personaId && !val.audioUrl && !val.voiceId) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Faceless generation requires exactly one of audioUrl or voiceId (or provide personaId)',
-      path: ['audioUrl'],
+      message: `Faceless generation requires ${FACELESS_VOICE_RULE} (or provide personaId)`,
+      path: [],
     });
     return;
   }
   if (!val.personaId && val.audioUrl && val.voiceId) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Faceless generation needs exactly one of audioUrl or voiceId, not both',
+      message: `Faceless generation needs ${FACELESS_VOICE_RULE}, not both`,
       path: ['voiceId'],
     });
   }
