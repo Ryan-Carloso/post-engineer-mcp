@@ -2,10 +2,16 @@ import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { PostEngineerClient } from './client.js';
 import {
+  AUDIO_URL_EMPTY_MESSAGE,
+  AUDIO_URL_INVALID_MESSAGE,
   FACELESS_VOICE_BOTH_MESSAGE,
   FACELESS_VOICE_MESSAGE,
+  PERSONA_ID_REQUIRED_MESSAGE,
   PERSONA_VOICE_ID_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
+  VIDEO_SUBJECT_REQUIRED_MESSAGE,
+  VOICE_ID_EMPTY_MESSAGE,
+  accountIdElementMessage,
   findProvidersMissingAccountIds,
   hasExactlyOneVoiceSource,
   isValidHttpUrl,
@@ -98,13 +104,13 @@ function parseArgsOrError<Input, Output>(
 }
 
 export const GenerateVideoObject = z.object({
-  personaId: z.string().trim().min(1, 'personaId is required').optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
+  personaId: z.string().trim().min(1, PERSONA_ID_REQUIRED_MESSAGE).optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
   scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
   audioUrl: z
     .string()
     .trim()
-    .min(1, 'audioUrl must not be empty')
-    .refine(isValidHttpUrl, 'audioUrl must be an http(s) URL')
+    .min(1, AUDIO_URL_EMPTY_MESSAGE)
+    .refine(isValidHttpUrl, AUDIO_URL_INVALID_MESSAGE)
     .optional()
     .describe(
       'Public URL of custom audio for this video. With a persona it overrides the persona voice; for faceless generation, provide this or voiceId (not both).'
@@ -112,7 +118,7 @@ export const GenerateVideoObject = z.object({
   voiceId: z
     .string()
     .trim()
-    .min(1)
+    .min(1, VOICE_ID_EMPTY_MESSAGE)
     .optional()
     .describe(
       'Voice ID for this video (see list_voices). Only used for faceless generation (rejected when personaId is provided); provide this or audioUrl, not both.'
@@ -120,7 +126,7 @@ export const GenerateVideoObject = z.object({
   videoSubject: z
     .string()
     .trim()
-    .min(1, 'videoSubject is required for faceless generation')
+    .min(1, VIDEO_SUBJECT_REQUIRED_MESSAGE)
     .optional()
     .describe(
       'Subject/topic of the video. Required for faceless generation (when personaId is omitted); sent as video_subject.'
@@ -132,7 +138,7 @@ export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) =>
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['videoSubject'],
-      message: 'videoSubject is required for faceless generation',
+      message: VIDEO_SUBJECT_REQUIRED_MESSAGE,
     });
     return;
   }
@@ -161,23 +167,32 @@ export const GetVideoStatusSchema = z.object({
 });
 
 export const ScheduleProvidersSchema = z
-  .array(z.enum(SCHEDULE_PROVIDER_NAMES))
+  // Trim before the enum check: the direct client also trims provider names,
+  // so ' youtube ' is accepted on both paths. preprocess (not pipe) keeps the
+  // advertised JSON Schema as a plain enum.
+  .array(
+    z.preprocess(
+      (value) => (typeof value === 'string' ? value.trim() : value),
+      z.enum(SCHEDULE_PROVIDER_NAMES)
+    )
+  )
   .min(1, 'At least one provider required');
 
 /**
  * Account-ID fields, one per provider. `satisfies` keeps the precise field
  * types (so z.infer resolves string[], not any) while still failing to
- * compile if a provider is added without its account-ID field.
+ * compile if a provider is added without its account-ID field. Element
+ * messages match the direct client's accountIdElementMessage wording.
  */
 const accountIdsShape = {
-  youtubeAccountIds: z.array(z.string().trim().min(1)).optional().default([]),
-  instagramAccountIds: z.array(z.string().trim().min(1)).optional().default([]),
-  linkedinAccountIds: z.array(z.string().trim().min(1)).optional().default([]),
-  blueskyAccountIds: z.array(z.string().trim().min(1)).optional().default([]),
+  youtubeAccountIds: z.array(z.string().trim().min(1, accountIdElementMessage('youtubeAccountIds'))).optional().default([]),
+  instagramAccountIds: z.array(z.string().trim().min(1, accountIdElementMessage('instagramAccountIds'))).optional().default([]),
+  linkedinAccountIds: z.array(z.string().trim().min(1, accountIdElementMessage('linkedinAccountIds'))).optional().default([]),
+  blueskyAccountIds: z.array(z.string().trim().min(1, accountIdElementMessage('blueskyAccountIds'))).optional().default([]),
 } satisfies Record<ProviderAccountIdsField, z.ZodTypeAny>;
 
 export const ScheduleVideoObject = z.object({
-  personaId: z.string().trim().min(1, 'personaId is required'),
+  personaId: z.string().trim().min(1, PERSONA_ID_REQUIRED_MESSAGE),
   providers: ScheduleProvidersSchema.describe('Target social platforms'),
   ...accountIdsShape,
   scheduledAt: z.string().describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),

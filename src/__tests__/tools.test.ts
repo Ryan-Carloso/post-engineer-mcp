@@ -273,6 +273,36 @@ describe('MCP Tool Handlers', () => {
       expect(parsed.blueskyAccountIds).toEqual(['bsky-1']);
     });
 
+    it('trims padded provider names before the enum check', () => {
+      const parsed = ScheduleVideoSchema.parse({
+        personaId: 'persona-123',
+        providers: [' youtube '],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      });
+      expect(parsed.providers).toEqual(['youtube']);
+    });
+
+    it('reports a blank voiceId with the shared empty message', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          voiceId: '   ',
+          videoSubject: 'Morning motivation',
+        })
+      ).toThrow(/voiceId must not be empty/i);
+    });
+
+    it('reports a blank account ID with the field-specific message', () => {
+      expect(() =>
+        ScheduleVideoSchema.parse({
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          youtubeAccountIds: ['  '],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+        })
+      ).toThrow(/youtubeAccountIds must contain only non-empty strings/i);
+    });
+
     it('defaults blueskyAccountIds to an empty array', () => {
       const parsed = ScheduleVideoSchema.parse({
         personaId: 'persona-123',

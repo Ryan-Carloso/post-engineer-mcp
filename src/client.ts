@@ -1,10 +1,16 @@
 import { validateScheduleAdvance } from './validator.js';
 import type { ProviderAccountIdsField, ScheduleProvider } from './shared.js';
 import {
+  AUDIO_URL_EMPTY_MESSAGE,
+  AUDIO_URL_INVALID_MESSAGE,
   FACELESS_VOICE_BOTH_MESSAGE,
   FACELESS_VOICE_MESSAGE,
+  PERSONA_ID_REQUIRED_MESSAGE,
   PERSONA_VOICE_ID_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
+  VIDEO_SUBJECT_REQUIRED_MESSAGE,
+  VOICE_ID_EMPTY_MESSAGE,
+  accountIdElementMessage,
   findProvidersMissingAccountIds,
   hasExactlyOneVoiceSource,
   isScheduleProvider,
@@ -313,6 +319,7 @@ export class PostEngineerClient {
     // the same message for the same input.
     for (const [name, value] of [
       ['personaId', input.personaId],
+      ['scriptPrompt', input.scriptPrompt],
       ['audioUrl', input.audioUrl],
       ['voiceId', input.voiceId],
       ['videoSubject', input.videoSubject],
@@ -322,16 +329,16 @@ export class PostEngineerClient {
       }
     }
     if (typeof input.personaId === 'string' && input.personaId.trim() === '') {
-      throw new Error('personaId is required');
+      throw new Error(PERSONA_ID_REQUIRED_MESSAGE);
     }
     if (input.voiceId !== undefined && input.voiceId.trim() === '') {
-      throw new Error('voiceId must not be empty');
+      throw new Error(VOICE_ID_EMPTY_MESSAGE);
     }
     if (input.audioUrl !== undefined && input.audioUrl.trim() === '') {
-      throw new Error('audioUrl must not be empty');
+      throw new Error(AUDIO_URL_EMPTY_MESSAGE);
     }
     if (input.videoSubject !== undefined && input.videoSubject.trim() === '') {
-      throw new Error('videoSubject is required for faceless generation');
+      throw new Error(VIDEO_SUBJECT_REQUIRED_MESSAGE);
     }
     const personaId = trimOptionalString(input.personaId);
     const audioUrl = trimOptionalString(input.audioUrl);
@@ -341,7 +348,7 @@ export class PostEngineerClient {
     // fail fast here instead of failing server-side after passing voice
     // validation.
     if (!personaId && !videoSubject) {
-      throw new Error('videoSubject is required for faceless generation');
+      throw new Error(VIDEO_SUBJECT_REQUIRED_MESSAGE);
     }
     if (!personaId && !hasExactlyOneVoiceSource(audioUrl, voiceId)) {
       // The "(or provide personaId)" advice only applies when neither source
@@ -353,7 +360,7 @@ export class PostEngineerClient {
       throw new Error(PERSONA_VOICE_ID_MESSAGE);
     }
     if (audioUrl && !isValidHttpUrl(audioUrl)) {
-      throw new Error('audioUrl must be an http(s) URL');
+      throw new Error(AUDIO_URL_INVALID_MESSAGE);
     }
     const url = `${this.baseUrl}/api/persona/video-job`;
     const response = await fetch(url, {
@@ -396,15 +403,23 @@ export class PostEngineerClient {
     // Mirror generateVideoJob's hardening: a blank or non-string personaId
     // fails fast here instead of server-side.
     if (typeof input.personaId !== 'string' || input.personaId.trim() === '') {
-      throw new Error('personaId is required');
+      throw new Error(PERSONA_ID_REQUIRED_MESSAGE);
     }
     const personaId = input.personaId.trim();
 
-    if (input.scheduledAt) {
-      const validation = validateScheduleAdvance(input.scheduledAt, input._nowForTesting);
-      if (!validation.isValid) {
-        throw new Error(validation.error);
-      }
+    // scheduledAt is required by the MCP schema (z.string(), no default):
+    // fail fast here instead of failing server-side with an opaque error.
+    if (
+      input.scheduledAt === undefined ||
+      input.scheduledAt === null ||
+      (typeof input.scheduledAt !== 'string' && !(input.scheduledAt instanceof Date)) ||
+      (typeof input.scheduledAt === 'string' && input.scheduledAt.trim() === '')
+    ) {
+      throw new Error('scheduledAt is required (ISO date time, between 24h and 30 days in the future)');
+    }
+    const scheduledAtValidation = validateScheduleAdvance(input.scheduledAt, input._nowForTesting);
+    if (!scheduledAtValidation.isValid) {
+      throw new Error(scheduledAtValidation.error);
     }
 
     // Mirror the MCP schema's superRefine rules and fail fast instead of
@@ -441,7 +456,7 @@ export class PostEngineerClient {
       if (Array.isArray(ids)) {
         for (const id of ids) {
           if (typeof id !== 'string' || id.trim() === '') {
-            throw new Error(`${field} must contain only non-empty strings`);
+            throw new Error(accountIdElementMessage(field));
           }
         }
       }

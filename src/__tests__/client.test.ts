@@ -653,12 +653,17 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('rejects an unknown provider without calling API', async () => {    global.fetch = vi.fn();
+  it('rejects an unknown provider without calling API', async () => {
+    global.fetch = vi.fn();
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
     await expect(
       client.createSchedule({
         personaId: 'persona-123',
         providers: ['tiktok' as unknown as 'youtube'],
         tiktokAccountIds: ['tt-1'],
+        scheduledAt: validTime,
+        _nowForTesting: now,
       } as never)
     ).rejects.toThrow(/Unknown provider "tiktok"/i);
     expect(global.fetch).not.toHaveBeenCalled();
@@ -690,10 +695,14 @@ describe('PostEngineerClient', () => {
 
   it('rejects when providers is omitted without calling API', async () => {
     global.fetch = vi.fn();
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
     await expect(
       client.createSchedule({
         personaId: 'persona-123',
         providers: undefined as unknown as [],
+        scheduledAt: validTime,
+        _nowForTesting: now,
       })
     ).rejects.toThrow(/providers must be a non-empty array/i);
     expect(global.fetch).not.toHaveBeenCalled();
@@ -701,11 +710,15 @@ describe('PostEngineerClient', () => {
 
   it('rejects when an account ID is blank without calling API', async () => {
     global.fetch = vi.fn();
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
     await expect(
       client.createSchedule({
         personaId: 'persona-123',
         providers: ['youtube'],
         youtubeAccountIds: ['  '],
+        scheduledAt: validTime,
+        _nowForTesting: now,
       })
     ).rejects.toThrow(/youtubeAccountIds must contain only non-empty strings/i);
     expect(global.fetch).not.toHaveBeenCalled();
@@ -713,11 +726,15 @@ describe('PostEngineerClient', () => {
 
   it('rejects a non-array account-ID field with an accurate type error', async () => {
     global.fetch = vi.fn();
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
     await expect(
       client.createSchedule({
         personaId: 'persona-123',
         providers: ['youtube'],
         youtubeAccountIds: 'yt-1' as unknown as string[],
+        scheduledAt: validTime,
+        _nowForTesting: now,
       })
     ).rejects.toThrow(/youtubeAccountIds must be an array of strings/i);
     expect(global.fetch).not.toHaveBeenCalled();
@@ -738,10 +755,14 @@ describe('PostEngineerClient', () => {
   it('accepts padded provider names and trims them', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
     global.fetch = fetchMock;
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
     await client.createSchedule({
       personaId: 'persona-123',
       providers: [' youtube ' as unknown as 'youtube'],
       youtubeAccountIds: ['yt-1'],
+      scheduledAt: validTime,
+      _nowForTesting: now,
     });
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body);
     expect(body.providers).toEqual(['youtube']);
@@ -749,15 +770,55 @@ describe('PostEngineerClient', () => {
 
   it('reports every missing provider at once', async () => {
     global.fetch = vi.fn();
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
     const error = await client
       .createSchedule({
         personaId: 'persona-123',
         providers: ['youtube', 'bluesky'],
+        scheduledAt: validTime,
+        _nowForTesting: now,
       })
       .catch((e: unknown) => e as Error);
     expect(error).toBeInstanceOf(Error);
     expect(error.message).toMatch(/youtubeAccountIds.*empty/i);
     expect(error.message).toMatch(/blueskyAccountIds.*empty/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing scheduledAt without calling API', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.createSchedule({
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+      })
+    ).rejects.toThrow(/scheduledAt is required/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a blank scheduledAt without calling API', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.createSchedule({
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: '   ',
+      })
+    ).rejects.toThrow(/scheduledAt is required/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-string scriptPrompt without calling API', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.generateVideoJob({
+        personaId: 'persona-123',
+        scriptPrompt: 42 as unknown as string,
+      })
+    ).rejects.toThrow(/scriptPrompt must be a string/i);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 

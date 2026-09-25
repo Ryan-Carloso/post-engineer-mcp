@@ -32,6 +32,21 @@ export function isScheduleProvider(value: unknown): value is ScheduleProvider {
   return typeof value === 'string' && (SCHEDULE_PROVIDER_NAMES as readonly string[]).includes(value);
 }
 
+// Per-field validation messages shared by the zod schemas (tools.ts) and
+// the direct client's fail-fast guards (client.ts): both layers must report
+// the same message for the same input, so the wording lives here — a
+// wording change in one layer cannot silently drift from the other.
+export const PERSONA_ID_REQUIRED_MESSAGE = 'personaId is required';
+export const VOICE_ID_EMPTY_MESSAGE = 'voiceId must not be empty';
+export const AUDIO_URL_EMPTY_MESSAGE = 'audioUrl must not be empty';
+export const AUDIO_URL_INVALID_MESSAGE = 'audioUrl must be an http(s) URL';
+export const VIDEO_SUBJECT_REQUIRED_MESSAGE = 'videoSubject is required for faceless generation';
+
+/** Account-ID element message, e.g. 'youtubeAccountIds must contain only non-empty strings'. */
+export function accountIdElementMessage(field: ProviderAccountIdsField): string {
+  return `${field} must contain only non-empty strings`;
+}
+
 export interface ProviderAccountIssue {
   provider: ScheduleProvider;
   field: ProviderAccountIdsField;
