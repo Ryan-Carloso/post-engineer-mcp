@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PostEngineerClient } from '../client.js';
+import type { GenerateVideoJobInput, CreateScheduleInput } from '../client.js';
 
 describe('PostEngineerClient', () => {
   let client: PostEngineerClient;
@@ -424,6 +425,23 @@ describe('PostEngineerClient', () => {
     expect(result).toEqual(mockJob);
   });
 
+  it('reports both faceless issues together, not just the first', async () => {
+    global.fetch = vi.fn();
+    const error = await client.generateVideoJob({}).catch((e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toMatch(/videoSubject is required for faceless generation/i);
+    expect(error.message).toMatch(/exactly one of audioUrl or voiceId/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a null input with a clear message instead of a TypeError', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.generateVideoJob(null as unknown as GenerateVideoJobInput)
+    ).rejects.toThrow(/input must be an object/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('throws before the request for faceless generation with no videoSubject', async () => {
     global.fetch = vi.fn();
     await expect(
@@ -496,6 +514,24 @@ describe('PostEngineerClient', () => {
     // shape carries no faceless-only fields.
     expect(payload).not.toHaveProperty('voice_id');
     expect(payload).not.toHaveProperty('video_subject');
+    expect(vi.mocked(global.fetch)).toHaveBeenCalled();
+  });
+
+  it('sends an explicit videoSubject alongside personaId as a topic override', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, jobId: 'job-1' }),
+    });
+
+    await client.generateVideoJob({ personaId: 'persona-123', videoSubject: 'Morning motivation' });
+
+    const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
+    const payload = JSON.parse(fetchBody.body);
+    expect(payload.personaId).toBe('persona-123');
+    // An explicit subject with a persona is a topic override (the web
+    // prefers it over the persona's default niche), not a rejected
+    // combination.
+    expect(payload.video_subject).toBe('Morning motivation');
     expect(vi.mocked(global.fetch)).toHaveBeenCalled();
   });
 
@@ -801,6 +837,14 @@ describe('PostEngineerClient', () => {
         scheduledAt: undefined as unknown as string,
       })
     ).rejects.toThrow(/scheduledAt is required/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a null input with a clear message instead of a TypeError', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.createSchedule(null as unknown as CreateScheduleInput)
+    ).rejects.toThrow(/input must be an object/i);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 

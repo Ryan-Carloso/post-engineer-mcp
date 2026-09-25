@@ -137,8 +137,10 @@ export const GenerateVideoObject = z.object({
 });
 
 export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) => {
-  // No early return: like the schedule schema, report every applicable issue
-  // at once so the caller isn't sent fix-one-retry-fix-another.
+  // No early returns: report every applicable issue at once so the caller
+  // isn't sent fix-one-retry-fix-another. The faceless branches and the
+  // persona branch are mutually exclusive (personaId falsy vs truthy), so
+  // falling through is safe.
   if (!val.personaId && !val.videoSubject) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -155,7 +157,6 @@ export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) =>
       path: [],
       message: neither ? FACELESS_VOICE_MESSAGE : FACELESS_VOICE_BOTH_MESSAGE,
     });
-    return;
   }
   if (val.personaId && val.voiceId) {
     ctx.addIssue({

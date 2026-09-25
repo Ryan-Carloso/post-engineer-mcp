@@ -56,6 +56,9 @@ export function stringFieldMessage(field: string): string {
   return `${field} must be a string`;
 }
 
+/** Guard for direct-client methods called with null/undefined by untyped JS callers. */
+export const INPUT_OBJECT_MESSAGE = 'input must be an object';
+
 export interface ProviderAccountIssue {
   provider: ScheduleProvider;
   field: ProviderAccountIdsField;

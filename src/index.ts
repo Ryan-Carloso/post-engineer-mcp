@@ -164,7 +164,10 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
     'Trigger video generation using an existing persona, or faceless (omit personaId). Faceless: required videoSubject plus exactly one of audioUrl (public http(s) URL) or voiceId (see list_voices) supplies the voice; optional scriptPrompt overrides the script. With a persona: optional scriptPrompt overrides the video script; optional audioUrl supplies custom audio, overriding the persona voice (voiceId is rejected).',
     // Base object shape: the cross-field rules live on GenerateVideoSchema
     // (superRefine) and are enforced in handleGenerateVideo, since the SDK
-    // only accepts raw shapes here.
+    // only accepts raw shapes here. Note: every request is therefore
+    // validated twice (the SDK parses the shape, the handler re-parses the
+    // full schema) — the handler-side parse is the load-bearing one, so keep
+    // both in sync.
     GenerateVideoObject.shape,
     async (args) => {
       return handleGenerateVideo(apiClient, args);
@@ -188,6 +191,9 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
     // Base object shape: the per-provider account rule lives on
     // ScheduleVideoSchema (superRefine) and is enforced in
     // handleScheduleVideo, since the SDK only accepts raw shapes here.
+    // Note: every request is therefore validated twice (the SDK parses the
+    // shape, the handler re-parses the full schema) — the handler-side parse
+    // is the load-bearing one, so keep both in sync.
     ScheduleVideoObject.shape,
     async (args) => {
       return handleScheduleVideo(apiClient, args);

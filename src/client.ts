@@ -5,6 +5,7 @@ import {
   AUDIO_URL_INVALID_MESSAGE,
   FACELESS_VOICE_BOTH_MESSAGE,
   FACELESS_VOICE_MESSAGE,
+  INPUT_OBJECT_MESSAGE,
   PERSONA_ID_REQUIRED_MESSAGE,
   PERSONA_VOICE_ID_MESSAGE,
   PROVIDERS_REQUIRED_MESSAGE,
@@ -305,6 +306,11 @@ export class PostEngineerClient {
   }
 
   async generateVideoJob(input: GenerateVideoJobInput): Promise<unknown> {
+    // Untyped JS callers can pass null/undefined: property access below
+    // would throw a raw TypeError, so guard the input itself first.
+    if (typeof input !== 'object' || input === null) {
+      throw new Error(INPUT_OBJECT_MESSAGE);
+    }
     // Fail fast for direct (non-MCP) callers, mirroring the MCP schema rules:
     // faceless generation needs a non-empty videoSubject and exactly one
     // voice source, and voiceId is rejected alongside personaId. Blank
@@ -349,15 +355,21 @@ export class PostEngineerClient {
     const videoSubject = trimOptionalString(input.videoSubject);
     // The web requires a non-empty video_subject for faceless generation;
     // fail fast here instead of failing server-side after passing voice
-    // validation.
+    // validation. Both faceless issues are reported together (joined), like
+    // the schema's superRefine and createSchedule's missing-account-ID
+    // aggregation, so the caller isn't sent fix-one-retry-fix-another.
+    const facelessIssues: string[] = [];
     if (!personaId && !videoSubject) {
-      throw new Error(VIDEO_SUBJECT_REQUIRED_MESSAGE);
+      facelessIssues.push(VIDEO_SUBJECT_REQUIRED_MESSAGE);
     }
     if (!personaId && !hasExactlyOneVoiceSource(audioUrl, voiceId)) {
       // The "(or provide personaId)" advice only applies when neither source
       // is given; when both are given, providing a personaId would itself be
       // rejected by the next guard.
-      throw new Error(audioUrl && voiceId ? FACELESS_VOICE_BOTH_MESSAGE : FACELESS_VOICE_MESSAGE);
+      facelessIssues.push(audioUrl && voiceId ? FACELESS_VOICE_BOTH_MESSAGE : FACELESS_VOICE_MESSAGE);
+    }
+    if (facelessIssues.length > 0) {
+      throw new Error(facelessIssues.join('; '));
     }
     if (personaId && voiceId) {
       throw new Error(PERSONA_VOICE_ID_MESSAGE);
@@ -374,7 +386,9 @@ export class PostEngineerClient {
         // A blank scriptPrompt is normalized to undefined (dropped), not an
         // error: unlike the validated fields above, an empty override is
         // meaningless rather than invalid. undefined values are omitted by
-        // JSON.stringify, as are voice_id/video_subject in persona mode.
+        // JSON.stringify; an explicit videoSubject alongside personaId is a
+        // topic override (the web prefers it over the persona's default
+        // niche) and is sent intentionally, not by accident.
         video_script_prompt: trimOptionalString(input.scriptPrompt),
         audio_url: audioUrl,
         // Guarded above: voiceId is only present for faceless generation.
@@ -407,6 +421,11 @@ export class PostEngineerClient {
   }
 
   async createSchedule(input: CreateScheduleInput): Promise<unknown> {
+    // Same null/undefined guard as generateVideoJob: fail with a clear
+    // message instead of a raw TypeError on the first property access.
+    if (typeof input !== 'object' || input === null) {
+      throw new Error(INPUT_OBJECT_MESSAGE);
+    }
     // Mirror generateVideoJob's hardening: a blank or non-string personaId
     // fails fast here instead of server-side.
     if (typeof input.personaId !== 'string' || input.personaId.trim() === '') {
