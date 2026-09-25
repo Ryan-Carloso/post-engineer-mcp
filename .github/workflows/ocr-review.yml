@@ -1,0 +1,47 @@
+# OpenCodeReview (Alibaba OCR) — second AI code reviewer, running side by side
+# with .github/workflows/opencode-review.yml for comparison testing.
+# Fork-safe: runs as pull_request_target (secrets available); the OCR action
+# checks out the trusted base and only fetches PR head blobs — it never
+# materializes untrusted PR code into the working tree.
+# LLM: same z.ai OpenAI-compatible endpoint + ZAI_API_KEY secret + model as the
+# OpenCode review. Skips gracefully when the secret is not set.
+# OCR posts its own sticky summary (marked <!-- ocr-summary -->) and inline
+# comments, branded "OpenCodeReview"; the opencode review comment is untouched.
+
+name: OCR Review (Alibaba OpenCodeReview)
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ocr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  ocr-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check for ZAI_API_KEY
+        id: key-check
+        run: |
+          if [ -z "${{ secrets.ZAI_API_KEY }}" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ZAI_API_KEY secret is not set — skipping OCR review."
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run OpenCodeReview
+        if: steps.key-check.outputs.present == 'true'
+        uses: alibaba/open-code-review@486022daaf14f7142275eddb9b3cacc3cc5dadfa # pinned 2026-09-25
+        with:
+          llm_url: https://api.z.ai/api/coding/paas/v4
+          llm_auth_token: ${{ secrets.ZAI_API_KEY }}
+          llm_model: glm-5.3-flash
+          llm_use_anthropic: "false"
