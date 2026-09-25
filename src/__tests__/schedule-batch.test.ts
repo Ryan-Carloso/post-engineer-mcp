@@ -457,6 +457,31 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     );
   });
 
+  it.each([0, 4.5])('rejects a 200 response with tokensSpent: %s as an unexpected shape', async (tokensSpent) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            scheduleId: 'sched-1',
+            tokensSpent,
+            slots: [
+              { topic: 'Topic one', slotAt: '2026-09-26T08:00:00.000Z' },
+              { topic: 'Topic two', slotAt: '2026-09-26T17:00:00.000Z' },
+            ],
+          }),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(
+      /unexpected shape.*tokensSpent/,
+    );
+  });
+
   it('throws when tokensSpent is not a number', async () => {
     vi.stubGlobal(
       'fetch',

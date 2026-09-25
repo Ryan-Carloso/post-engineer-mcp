@@ -13,18 +13,25 @@ export const MAX_BATCH_ITEMS = 30;
 const LEGACY_FIXED_OFFSET_ALIAS =
   /^(EST|MST|HST|PST|CST|EST5EDT|CST6CDT|MST7MDT|PST8PDT|AKST|AKDT|HAST|HADT)$/i;
 
-// IANA timezone check. UTC-offset strings ("+05:30", "+05") and GMT/UTC
-// offset aliases ("GMT+5") are rejected explicitly first. Otherwise the input
-// is canonicalized via resolvedOptions().timeZone (so links like
-// "US/Pacific" and any casing like "utc" resolve to their canonical IDs) and
-// the canonical ID is validated against Intl.supportedValuesOf('timeZone')
-// where available. 'UTC' and the 'Etc/UTC' + 'Etc/GMT±H' family are valid IANA
-// zones but are missing from supportedValuesOf on some builds, so they are
-// allowed explicitly. On runtimes without supportedValuesOf, the constructor
-// check alone decides.
+// UTC-offset strings ("+05:30", "+05") and GMT/UTC offset aliases ("GMT+5")
+// must be rejected on the RAW input (see the timezone field below): on ICU
+// builds where the constructor accepts "GMT+5", canonicalizing it would
+// silently resolve to "Etc/GMT+5", which is UTC-5 (POSIX-inverted sign) — a
+// 10-hour trap. The same regexes are repeated inside isIanaTimezone as
+// defense-in-depth.
+
+// IANA timezone check. The input is canonicalized via
+// resolvedOptions().timeZone (so links like "US/Pacific" and any casing like
+// "utc" resolve to their canonical IDs) and the canonical ID is validated
+// against Intl.supportedValuesOf('timeZone') where available. 'UTC' and the
+// 'Etc/UTC' + 'Etc/GMT±H' family are valid IANA zones but are missing from
+// supportedValuesOf on some builds, so they are allowed explicitly. On
+// runtimes without supportedValuesOf, the constructor check alone decides.
+const RAW_OFFSET_ALIAS = /^[+-]\d{1,2}(:?\d{2})?$/;
+const RAW_GMT_OFFSET_ALIAS = /^(?:GMT|UTC)[+-]\d{1,2}(:?\d{2})?$/i;
 const isIanaTimezone = (tz: string): boolean => {
-  if (/^[+-]\d{1,2}(:?\d{2})?$/.test(tz)) return false;
-  if (/^(?:GMT|UTC)[+-]\d{1,2}(:?\d{2})?$/i.test(tz)) return false;
+  if (RAW_OFFSET_ALIAS.test(tz)) return false;
+  if (RAW_GMT_OFFSET_ALIAS.test(tz)) return false;
   let canonical: string;
   try {
     canonical = new Intl.DateTimeFormat('en', { timeZone: tz }).resolvedOptions().timeZone;
@@ -81,6 +88,10 @@ export const scheduleVideoBatchParams = {
   timezone: z
     .string()
     .min(1, 'timezone is required')
+    .refine((tz) => !RAW_OFFSET_ALIAS.test(tz) && !RAW_GMT_OFFSET_ALIAS.test(tz), {
+      message:
+        'use a canonical IANA zone (e.g. "Europe/Lisbon") instead of a UTC offset or GMT/UTC offset alias like "GMT+5"',
+    })
     .refine((tz) => !LEGACY_FIXED_OFFSET_ALIAS.test(tz), {
       message:
         'use a canonical IANA zone (e.g. "America/New_York") instead of a legacy fixed-offset alias like "EST"',
