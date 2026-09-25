@@ -361,13 +361,7 @@ export class PostEngineerClient {
     const response = await fetch(url, {
       method: 'POST',
       headers: this.getHeaders(),
-      body: JSON.stringify({
-        personaId: input.personaId,
-        items: input.items,
-        providers: input.providers,
-        times: input.times,
-        timezone: input.timezone,
-      }),
+      body: JSON.stringify(input),
     });
 
     if (!response.ok) {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ScheduleVideoBatchSchema, handleScheduleVideoBatch } from '../tools.js';
+import { ScheduleVideoBatchSchema, scheduleVideoBatchParams, handleScheduleVideoBatch } from '../tools.js';
 import { PostEngineerClient } from '../client.js';
 import { createPostEngineerMcpServer } from '../index.js';
 
@@ -134,5 +134,29 @@ describe('schedule_video_batch registration', () => {
     const server = createPostEngineerMcpServer();
     const registered = (server as unknown as { _registeredTools: Record<string, unknown> })._registeredTools;
     expect(registered['schedule_video_batch']).toBeDefined();
+  });
+
+  it('registers the strict shared schema (rejects what the old loose schema allowed)', () => {
+    // The tool params must be the single source of truth: whitespace-only
+    // topics and malformed times are rejected at the MCP boundary.
+    expect(() =>
+      ScheduleVideoBatchSchema.parse({
+        personaId: 'p1',
+        items: [{ topic: '   ' }],
+        providers: ['youtube'],
+        times: ['09:00'],
+        timezone: 'UTC',
+      }),
+    ).toThrow();
+    expect(() =>
+      ScheduleVideoBatchSchema.parse({
+        personaId: 'p1',
+        items: [{ topic: 'Real topic' }],
+        providers: ['youtube'],
+        times: ['6am'],
+        timezone: 'UTC',
+      }),
+    ).toThrow();
+    expect(scheduleVideoBatchParams.items).toBeDefined();
   });
 });

@@ -79,20 +79,31 @@ export const ScheduleVideoSchema = z.object({
   timezone: z.string().optional().default('UTC'),
 });
 
-export const ScheduleVideoBatchSchema = z.object({
-  personaId: z.string().min(1, 'personaId is required'),
+export const MAX_BATCH_ITEMS = 30;
+
+export const scheduleVideoBatchParams = {
+  personaId: z.string().min(1, 'personaId is required').describe('The ID of the persona'),
   items: z
-    .array(z.object({ topic: z.string().trim().min(1, 'Every item needs a non-empty topic') }))
+    .array(
+      z.object({
+        topic: z.string().trim().min(1, 'Every item needs a non-empty topic').describe('Topic for this video'),
+      }),
+    )
     .min(1, 'At least one item required')
-    .max(30, 'At most 30 items per batch'),
+    .max(MAX_BATCH_ITEMS, `At most ${MAX_BATCH_ITEMS} items per batch`)
+    .describe('One entry per video; each entry becomes exactly one video'),
   providers: z
     .array(z.enum(['youtube', 'instagram', 'linkedin', 'bluesky']))
-    .min(1, 'At least one provider required'),
+    .min(1, 'At least one provider required')
+    .describe('Target social platforms'),
   times: z
     .array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'times must be "HH:MM"'))
-    .min(1, 'At least one time required'),
-  timezone: z.string().min(1, 'timezone is required'),
-});
+    .min(1, 'At least one time required')
+    .describe('Daily "HH:MM" times; slots are the next N chronological occurrences'),
+  timezone: z.string().min(1, 'timezone is required').describe('IANA timezone for the times, e.g. "Europe/Lisbon"'),
+};
+
+export const ScheduleVideoBatchSchema = z.object(scheduleVideoBatchParams);
 
 export async function handleCreatePersona(
   client: PostEngineerClient,
