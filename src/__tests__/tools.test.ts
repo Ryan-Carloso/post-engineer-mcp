@@ -272,6 +272,19 @@ describe('MCP Tool Handlers', () => {
       ).toThrow(/http\(s\)/i);
     });
 
+    it('reports a blank audioUrl with the empty message, matching the direct client', () => {
+      const result = GenerateVideoSchema.safeParse({
+        personaId: 'persona-123',
+        audioUrl: '   ',
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.map((issue) => issue.message)).toContain(
+          'audioUrl must not be empty'
+        );
+      }
+    });
+
     it('accepts faceless generation with only voiceId', () => {
       const parsed = GenerateVideoSchema.parse({
         voiceId: 'voice-calm-1',

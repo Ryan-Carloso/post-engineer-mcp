@@ -36,9 +36,12 @@ describe('tool registration', () => {
     expect(tool).toBeDefined();
     const properties = tool?.inputSchema.properties ?? {};
     expect(Object.keys(properties)).toEqual(
-      expect.arrayContaining(['personaId', 'scriptPrompt', 'audioUrl', 'voiceId'])
+      expect.arrayContaining(['personaId', 'scriptPrompt', 'audioUrl', 'voiceId', 'videoSubject'])
     );
     expect(tool?.inputSchema.required ?? []).not.toContain('personaId');
+    // videoSubject is only required for faceless calls — it must stay
+    // optional in the advertised schema.
+    expect(tool?.inputSchema.required ?? []).not.toContain('videoSubject');
   });
 
   it('advertises schedule_video with bluesky in the providers enum and per-provider account arrays', async () => {
