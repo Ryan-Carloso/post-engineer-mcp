@@ -97,6 +97,34 @@ describe('ScheduleVideoBatchSchema', () => {
     expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: 'UTC' }).success).toBe(true);
   });
 
+  it('falls back to the constructor check when supportedValuesOf is missing', () => {
+    const holder = Intl as unknown as { supportedValuesOf?: unknown };
+    const original = holder.supportedValuesOf;
+    holder.supportedValuesOf = undefined;
+    try {
+      expect(
+        ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: 'Europe/Lisbon' }).success,
+      ).toBe(true);
+    } finally {
+      holder.supportedValuesOf = original;
+    }
+  });
+
+  it('falls back to the constructor check when supportedValuesOf throws', () => {
+    const holder = Intl as unknown as { supportedValuesOf?: unknown };
+    const original = holder.supportedValuesOf;
+    holder.supportedValuesOf = () => {
+      throw new Error('not available');
+    };
+    try {
+      expect(
+        ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: 'Europe/Lisbon' }).success,
+      ).toBe(true);
+    } finally {
+      holder.supportedValuesOf = original;
+    }
+  });
+
   it('accepts a canonical IANA zone', () => {
     expect(
       ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: 'America/New_York' }).success,
@@ -522,6 +550,14 @@ describe('handleScheduleVideoBatch', () => {
     const response = await handleScheduleVideoBatch(mockClient, validArgs);
     expect(response.isError).toBe(true);
     expect(response.content[0].text).toContain('INSUFFICIENT_TOKENS');
+  });
+
+  it('formats non-Error rejections without rendering undefined', async () => {
+    vi.mocked(mockClient.scheduleVideoBatch).mockRejectedValue('boom');
+
+    const response = await handleScheduleVideoBatch(mockClient, validArgs);
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toBe('Error scheduling video batch: boom');
   });
 });
 

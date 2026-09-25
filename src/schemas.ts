@@ -40,7 +40,8 @@ const isIanaTimezone = (tz: string): boolean => {
     try {
       return supportedValuesOf('timeZone').includes(canonical);
     } catch {
-      // fall through to the constructor result
+      // supportedValuesOf failed; the constructor already produced a valid
+      // canonical ID above, so accept it.
     }
   }
   return true;
@@ -105,6 +106,8 @@ export const ScheduleVideoBatchSchema = z.object(scheduleVideoBatchParams);
 // Validated shape of the backend's success response for POST /api/schedule/batch.
 export const ScheduleVideoBatchResponseSchema = z.object({
   scheduleId: z.string().min(1),
+  // The backend always charges items.length × per-video cost (each ≥ 1 token),
+  // so a successful batch can never legitimately report 0 tokens spent.
   tokensSpent: z.number().int().min(1),
   slots: z.array(
     z.object({
