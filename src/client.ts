@@ -1,6 +1,6 @@
 import { validateScheduleAdvance } from './validator.js';
 import type { z } from 'zod';
-import type { ScheduleVideoBatchSchema } from './schemas.js';
+import type { ScheduleVideoBatchSchema, ScheduleVideoBatchResponse } from './schemas.js';
 import { ScheduleVideoBatchResponseSchema } from './schemas.js';
 
 export interface PostEngineerClientOptions {
@@ -355,17 +355,26 @@ export class PostEngineerClient {
     return response.json();
   }
 
-  async scheduleVideoBatch(input: ScheduleVideoBatchInput): Promise<unknown> {
+  async scheduleVideoBatch(input: ScheduleVideoBatchInput): Promise<ScheduleVideoBatchResponse> {
     const url = `${this.baseUrl}/api/schedule/batch`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify(input),
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(input),
+      });
+    } catch (err) {
+      throw new Error(
+        `Failed to schedule video batch: network error (${err instanceof Error ? err.message : String(err)}); the batch may still have been created — check list_schedules before retrying`,
+      );
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Failed to schedule video batch: ${response.status} ${errorText}`);
+      throw new Error(
+        `Failed to schedule video batch: ${response.status} ${errorText}; the batch may still have been created — check list_schedules before retrying`,
+      );
     }
 
     let body: unknown;
@@ -399,6 +408,12 @@ export class PostEngineerClient {
         `Failed to schedule video batch: response had an unexpected shape (${parsed.error.issues
           .map((issue) => issue.path.join('.') || '(root)')
           .join(', ')}); the batch may still have been created — check list_schedules before retrying`,
+      );
+    }
+
+    if (parsed.data.slots.length !== input.items.length) {
+      throw new Error(
+        `Failed to schedule video batch: response had an unexpected shape (slots.length ${parsed.data.slots.length} !== items.length ${input.items.length}); the batch may still have been created — check list_schedules before retrying`,
       );
     }
 

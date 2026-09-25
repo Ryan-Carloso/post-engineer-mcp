@@ -6,14 +6,26 @@ import { z } from 'zod';
 
 export const MAX_BATCH_ITEMS = 30;
 
-// IANA timezone check via the Intl constructor (throws on unknown zones).
-// The constructor also accepts UTC-offset strings like "+05:30" or "+05",
-// which are not IANA zone IDs, so those are rejected explicitly. GMT/UTC
-// offset aliases (e.g. "GMT+5") vary across ICU builds, so they are rejected
-// here too rather than relying on the constructor.
+// IANA timezone check. Where available, Intl.supportedValuesOf('timeZone')
+// is the primary check: it lists canonical IANA zone IDs and excludes the
+// legacy aliases (EST, PST, ...) that the Intl constructor accepts on some
+// ICU builds. UTC-offset strings ("+05:30", "+05") and GMT/UTC offset aliases
+// ("GMT+5") are rejected explicitly first. 'UTC' is a valid IANA zone but is
+// missing from supportedValuesOf on some builds, so it is allowed explicitly.
+// On runtimes without supportedValuesOf, fall back to the constructor check.
 const isIanaTimezone = (tz: string): boolean => {
   if (/^[+-]\d{1,2}(:?\d{2})?$/.test(tz)) return false;
   if (/^(?:GMT|UTC)[+-]\d{1,2}(:?\d{2})?$/i.test(tz)) return false;
+  const supportedValuesOf = (
+    Intl as unknown as { supportedValuesOf?: (key: string) => string[] }
+  ).supportedValuesOf;
+  if (typeof supportedValuesOf === 'function') {
+    try {
+      return tz === 'UTC' || supportedValuesOf('timeZone').includes(tz);
+    } catch {
+      // fall through to the constructor check
+    }
+  }
   try {
     new Intl.DateTimeFormat('en', { timeZone: tz });
     return true;
@@ -69,7 +81,7 @@ export const ScheduleVideoBatchResponseSchema = z.object({
   slots: z.array(
     z.object({
       topic: z.string(),
-      slotAt: z.string(),
+      slotAt: z.string().datetime({ offset: true }),
     }),
   ),
 });

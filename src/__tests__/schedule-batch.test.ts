@@ -97,6 +97,16 @@ describe('ScheduleVideoBatchSchema', () => {
     expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: 'UTC' }).success).toBe(true);
   });
 
+  it('accepts a canonical IANA zone', () => {
+    expect(
+      ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: 'America/New_York' }).success,
+    ).toBe(true);
+  });
+
+  it.each(['EST', 'PST'])('rejects the ICU legacy alias %s', (timezone) => {
+    expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone }).success).toBe(false);
+  });
+
   it.each(['+05:30', '+0530', '-08:00', '+05', '-08', 'GMT+5'])('rejects UTC-offset string %s as timezone', (timezone) => {
     const result = ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone });
     expect(result.success).toBe(false);
@@ -115,7 +125,16 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
   it('POSTs the batch payload to /api/schedule/batch', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ success: true, scheduleId: 'sched-1', tokensSpent: 4, slots: [] }),
+      json: () =>
+        Promise.resolve({
+          success: true,
+          scheduleId: 'sched-1',
+          tokensSpent: 4,
+          slots: [
+            { topic: 'Topic one', slotAt: '2026-09-26T08:00:00.000Z' },
+            { topic: 'Topic two', slotAt: '2026-09-26T17:00:00.000Z' },
+          ],
+        }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -234,6 +253,71 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
 
     const client = new PostEngineerClient({ apiKey: 'key' });
     await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/unexpected shape.*slots/);
+  });
+
+  it('throws when slots.length does not match items.length', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            scheduleId: 'sched-1',
+            tokensSpent: 4,
+            slots: [{ topic: 'Topic one', slotAt: '2026-09-26T08:00:00.000Z' }],
+          }),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/slots\.length 1 !== items\.length 2/);
+  });
+
+  it('throws when a slotAt is not a datetime', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            scheduleId: 'sched-1',
+            tokensSpent: 4,
+            slots: [
+              { topic: 'Topic one', slotAt: 'tomorrow-ish' },
+              { topic: 'Topic two', slotAt: '2026-09-26T17:00:00.000Z' },
+            ],
+          }),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/unexpected shape.*slotAt/);
+  });
+
+  it('includes the retry hazard when the backend returns a 500', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 500, text: () => Promise.resolve('boom') }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(
+      /check list_schedules before retrying/,
+    );
+  });
+
+  it('includes the retry hazard on a network error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(new TypeError('fetch failed')),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(
+      /network error.*check list_schedules before retrying/,
+    );
   });
 
   it('throws when tokensSpent is not a number', async () => {
