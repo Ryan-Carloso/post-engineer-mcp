@@ -413,10 +413,12 @@ export class PostEngineerClient {
       const envelope = body as { error?: unknown; code?: unknown };
       const detail =
         typeof envelope.error === 'string' && envelope.error.length > 0
-          ? envelope.error
+          ? envelope.error.slice(0, 500)
           : 'batch rejected';
       const code =
-        typeof envelope.code === 'string' && envelope.code.length > 0 ? ` (${envelope.code})` : '';
+        typeof envelope.code === 'string' && envelope.code.length > 0
+          ? ` (${envelope.code.slice(0, 100)})`
+          : '';
       throw new Error(`Failed to schedule video batch: ${detail}${code}`);
     }
 
@@ -429,9 +431,9 @@ export class PostEngineerClient {
       );
     }
 
-    if (parsed.data.slots.length !== input.items.length) {
+    if (parsed.data.slots.length !== validated.items.length) {
       throw new Error(
-        `Failed to schedule video batch: response had an unexpected shape (slots.length ${parsed.data.slots.length} !== items.length ${input.items.length}); the batch may still have been created — check list_schedules before retrying`,
+        `Failed to schedule video batch: response had an unexpected shape (slots.length ${parsed.data.slots.length} !== items.length ${validated.items.length}); the batch may still have been created — check list_schedules before retrying`,
       );
     }
 
