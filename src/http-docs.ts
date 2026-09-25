@@ -1,3 +1,5 @@
+import { MAX_BATCH_ITEMS } from './schemas.js';
+
 const SERVICE_NAME = 'Post Engineer MCP';
 const MCP_ENDPOINT = 'https://mcp.post-engineer.com/';
 
@@ -76,6 +78,7 @@ For OpenCode, Claude Desktop, Cursor, and other local clients using stdio:
 - \`list_social_accounts\`
 - \`connect_account\` — connect a social account (OAuth URL for youtube/instagram/linkedin; direct connect for bluesky with handle + appPassword)
 - \`schedule_video\`
+- \`schedule_video_batch\` — schedule a finite manual batch (1-${MAX_BATCH_ITEMS} videos, one topic each; each provider needs a connected account, batch targets all of them; tokens charged upfront)
 - \`list_schedules\`
 - \`list_posts\` — upcoming (scheduled) and past (published/failed) posts across all connected accounts
 - \`cancel_schedule\`
@@ -163,7 +166,7 @@ export const docsHtml: string = `<!doctype html>
       <li><a href="/.well-known/oauth-protected-resource">OAuth discovery metadata</a></li>
     </ul>
     <h2>Available tools</h2>
-    <p><code>list_personas</code>, <code>list_voices</code>, <code>list_faces</code>, <code>create_persona</code>, <code>update_persona</code>, <code>get_token_balance</code>, <code>generate_video_from_persona</code>, <code>get_video_status</code>, <code>list_social_accounts</code>, <code>connect_account</code>, <code>schedule_video</code>, <code>list_schedules</code>, <code>list_posts</code>, <code>cancel_schedule</code></p>
+    <p><code>list_personas</code>, <code>list_voices</code>, <code>list_faces</code>, <code>create_persona</code>, <code>update_persona</code>, <code>get_token_balance</code>, <code>generate_video_from_persona</code>, <code>get_video_status</code>, <code>list_social_accounts</code>, <code>connect_account</code>, <code>schedule_video</code>, <code>schedule_video_batch</code>, <code>list_schedules</code>, <code>list_posts</code>, <code>cancel_schedule</code></p>
     <h2>Example prompts</h2>
     <p>Copy one of these into a chat with the app selected:</p>
     <ul>

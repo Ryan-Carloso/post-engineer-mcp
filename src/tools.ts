@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ScheduleVideoBatchSchema } from './schemas.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { PostEngineerClient } from './client.js';
 
@@ -78,6 +79,7 @@ export const ScheduleVideoSchema = z.object({
   postsPerDay: z.number().int().min(1).max(10).optional(),
   timezone: z.string().optional().default('UTC'),
 });
+
 
 export async function handleCreatePersona(
   client: PostEngineerClient,
@@ -483,6 +485,33 @@ export async function handleScheduleVideo(
         {
           type: 'text',
           text: `Error scheduling video: ${(error as Error).message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+export async function handleScheduleVideoBatch(
+  client: PostEngineerClient,
+  args: z.infer<typeof ScheduleVideoBatchSchema>
+): Promise<McpToolResponse> {
+  try {
+    const result = await client.scheduleVideoBatch(args);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Video batch scheduled successfully: ${JSON.stringify(result, null, 2)}`,
+        },
+      ],
+    };
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error scheduling video batch: ${error instanceof Error ? error.message : String(error)}`,
         },
       ],
       isError: true,

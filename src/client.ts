@@ -1,4 +1,16 @@
 import { validateScheduleAdvance } from './validator.js';
+import type { z } from 'zod';
+import type { ScheduleVideoBatchResponse } from './schemas.js';
+import { ScheduleVideoBatchSchema, ScheduleVideoBatchResponseSchema } from './schemas.js';
+
+// Best-effort extraction of a scheduleId from an otherwise malformed 200
+// body: a backend that created the batch echoes its scheduleId, so a valid
+// one lets us report the outcome as confirmed instead of uncertain.
+function readScheduleId(body: unknown): string | null {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return null;
+  const scheduleId = (body as { scheduleId?: unknown }).scheduleId;
+  return typeof scheduleId === 'string' && scheduleId.length > 0 ? scheduleId.slice(0, 100) : null;
+}
 
 export interface PostEngineerClientOptions {
   apiKey?: string;
@@ -49,6 +61,10 @@ export interface CreateScheduleInput {
   timezone?: string;
   _nowForTesting?: Date;
 }
+
+// Single source of truth: derived from the strict zod schema in schemas.ts
+// so the client payload can never drift from MCP-boundary validation.
+export type ScheduleVideoBatchInput = z.infer<typeof ScheduleVideoBatchSchema>;
 
 const PRODUCTION_API_URL = 'https://post-engineer.com';
 
@@ -346,5 +362,102 @@ export class PostEngineerClient {
     }
 
     return response.json();
+  }
+
+  async scheduleVideoBatch(input: ScheduleVideoBatchInput): Promise<ScheduleVideoBatchResponse> {
+    // Defense-in-depth: the MCP boundary validates first, but direct library
+    // consumers bypass it. This also enforces the trim/transform invariants
+    // (topic trimming, canonical timezone) the slots.length check relies on.
+    const inputParse = ScheduleVideoBatchSchema.safeParse(input);
+    if (!inputParse.success) {
+      throw new Error(
+        `Failed to schedule video batch: invalid input (${inputParse.error.issues
+          .map((issue) => issue.path.join('.') || '(root)')
+          .join(', ')})`,
+      );
+    }
+    const validated = inputParse.data;
+    const url = `${this.baseUrl}/api/schedule/batch`;
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(validated),
+        // A hanging server must not block the tool call forever; an abort
+        // lands in the network-error catch below with the retry hazard.
+        signal: AbortSignal.timeout(60_000),
+      });
+    } catch (err) {
+      throw new Error(
+        `Failed to schedule video batch: network error (${err instanceof Error ? err.message : String(err)}); the batch may still have been created — check list_schedules before retrying`,
+      );
+    }
+
+    if (!response.ok) {
+      // 4xx (except 408) means the backend definitively rejected the batch
+      // (nothing was created or charged). 5xx and 408 leave the outcome
+      // uncertain: the server may have charged and created the batch.
+      let errorText = '';
+      try {
+        errorText = (await response.text()).slice(0, 500);
+      } catch {
+        // Reading the error body failed (e.g. connection reset mid-body);
+        // fall through with an empty body rather than masking the status.
+      }
+      const uncertain = response.status >= 500 || response.status === 408;
+      const hazard = uncertain
+        ? '; the batch may still have been created — check list_schedules before retrying'
+        : '';
+      throw new Error(`Failed to schedule video batch: ${response.status} ${errorText}${hazard}`);
+    }
+
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch (err) {
+      throw new Error(
+        `Failed to schedule video batch: could not parse the response body as JSON (${err instanceof Error ? err.message : String(err)}); the batch may still have been created — check list_schedules before retrying`,
+      );
+    }
+
+    if (
+      body !== null &&
+      typeof body === 'object' &&
+      !Array.isArray(body) &&
+      (body as { success?: unknown }).success === false
+    ) {
+      const envelope = body as { error?: unknown; code?: unknown };
+      const detail =
+        typeof envelope.error === 'string' && envelope.error.length > 0
+          ? envelope.error.slice(0, 500)
+          : 'batch rejected';
+      const code =
+        typeof envelope.code === 'string' && envelope.code.length > 0
+          ? ` (${envelope.code.slice(0, 100)})`
+          : '';
+      throw new Error(`Failed to schedule video batch: ${detail}${code}`);
+    }
+
+    const parsed = ScheduleVideoBatchResponseSchema.safeParse(body);
+    if (!parsed.success) {
+      const issues = parsed.error.issues.map((issue) => issue.path.join('.') || '(root)').join(', ');
+      // A 200 response carrying a valid scheduleId means the backend created
+      // and charged the batch — report it as confirmed, not uncertain.
+      const createdId = readScheduleId(body);
+      throw new Error(
+        createdId !== null
+          ? `Failed to schedule video batch: response had an unexpected shape (${issues}); the batch was created (scheduleId: "${createdId}") — verify with list_schedules`
+          : `Failed to schedule video batch: response had an unexpected shape (${issues}); the batch may still have been created — check list_schedules before retrying`,
+      );
+    }
+
+    if (parsed.data.slots.length !== validated.items.length) {
+      throw new Error(
+        `Failed to schedule video batch: response had an unexpected shape (slots.length ${parsed.data.slots.length} !== items.length ${validated.items.length}); the batch was created (scheduleId: "${parsed.data.scheduleId}") — verify with list_schedules`,
+      );
+    }
+
+    return parsed.data;
   }
 }
