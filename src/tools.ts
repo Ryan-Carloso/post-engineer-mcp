@@ -17,6 +17,7 @@ import {
   findProvidersMissingAccountIds,
   hasExactlyOneVoiceSource,
   isValidHttpUrl,
+  stringFieldMessage,
 } from './shared.js';
 import type { ProviderAccountIdsField } from './shared.js';
 
@@ -106,10 +107,10 @@ function parseArgsOrError<Input, Output>(
 }
 
 export const GenerateVideoObject = z.object({
-  personaId: z.string().trim().min(1, PERSONA_ID_REQUIRED_MESSAGE).optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
-  scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
+  personaId: z.string({ invalid_type_error: stringFieldMessage('personaId') }).trim().min(1, PERSONA_ID_REQUIRED_MESSAGE).optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
+  scriptPrompt: z.string({ invalid_type_error: stringFieldMessage('scriptPrompt') }).optional().describe('Optional specific prompt override for this video'),
   audioUrl: z
-    .string()
+    .string({ invalid_type_error: stringFieldMessage('audioUrl') })
     .trim()
     .min(1, AUDIO_URL_EMPTY_MESSAGE)
     .refine(isValidHttpUrl, AUDIO_URL_INVALID_MESSAGE)
@@ -118,7 +119,7 @@ export const GenerateVideoObject = z.object({
       'Public URL of custom audio for this video. With a persona it overrides the persona voice; for faceless generation, provide this or voiceId (not both).'
     ),
   voiceId: z
-    .string()
+    .string({ invalid_type_error: stringFieldMessage('voiceId') })
     .trim()
     .min(1, VOICE_ID_EMPTY_MESSAGE)
     .optional()
@@ -126,7 +127,7 @@ export const GenerateVideoObject = z.object({
       'Voice ID for this video (see list_voices). Only used for faceless generation (rejected when personaId is provided); provide this or audioUrl, not both.'
     ),
   videoSubject: z
-    .string()
+    .string({ invalid_type_error: stringFieldMessage('videoSubject') })
     .trim()
     .min(1, VIDEO_SUBJECT_REQUIRED_MESSAGE)
     .optional()
@@ -136,13 +137,14 @@ export const GenerateVideoObject = z.object({
 });
 
 export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) => {
+  // No early return: like the schedule schema, report every applicable issue
+  // at once so the caller isn't sent fix-one-retry-fix-another.
   if (!val.personaId && !val.videoSubject) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['videoSubject'],
       message: VIDEO_SUBJECT_REQUIRED_MESSAGE,
     });
-    return;
   }
   if (!val.personaId && !hasExactlyOneVoiceSource(val.audioUrl, val.voiceId)) {
     const neither = !val.audioUrl && !val.voiceId;
@@ -194,10 +196,10 @@ const accountIdsShape = {
 } satisfies Record<ProviderAccountIdsField, z.ZodTypeAny>;
 
 export const ScheduleVideoObject = z.object({
-  personaId: z.string().trim().min(1, PERSONA_ID_REQUIRED_MESSAGE),
+  personaId: z.string({ invalid_type_error: stringFieldMessage('personaId') }).trim().min(1, PERSONA_ID_REQUIRED_MESSAGE),
   providers: ScheduleProvidersSchema.describe('Target social platforms'),
   ...accountIdsShape,
-  scheduledAt: z.string().min(1, SCHEDULED_AT_REQUIRED_MESSAGE).describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
+  scheduledAt: z.string({ invalid_type_error: stringFieldMessage('scheduledAt') }).trim().min(1, SCHEDULED_AT_REQUIRED_MESSAGE).describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
   daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
   startHour: z.number().int().min(0).max(23).optional(),
   endHour: z.number().int().min(0).max(23).optional(),

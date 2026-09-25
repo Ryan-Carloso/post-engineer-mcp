@@ -273,6 +273,16 @@ describe('MCP Tool Handlers', () => {
       expect(parsed.blueskyAccountIds).toEqual(['bsky-1']);
     });
 
+    it('trims a padded scheduledAt on the schema path', () => {
+      const parsed = ScheduleVideoSchema.parse({
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: '  2026-10-01T10:00:00.000Z  ',
+      });
+      expect(parsed.scheduledAt).toBe('2026-10-01T10:00:00.000Z');
+    });
+
     it('trims padded provider names before the enum check', () => {
       const parsed = ScheduleVideoSchema.parse({
         personaId: 'persona-123',
@@ -281,6 +291,29 @@ describe('MCP Tool Handlers', () => {
         scheduledAt: '2026-10-01T10:00:00.000Z',
       });
       expect(parsed.providers).toEqual(['youtube']);
+    });
+
+    it('reports a non-string field with the shared message, not zod’s default', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          audioUrl: 42 as unknown as string,
+          videoSubject: 'Morning motivation',
+        })
+      ).toThrow(/audioUrl must be a string/i);
+    });
+
+    it('reports every faceless issue at once', () => {
+      expect(() => GenerateVideoSchema.parse({})).toThrow(
+        /videoSubject is required for faceless generation/i
+      );
+      try {
+        GenerateVideoSchema.parse({});
+        expect.unreachable();
+      } catch (error) {
+        const message = (error as Error).message;
+        expect(message).toMatch(/videoSubject is required for faceless generation/i);
+        expect(message).toMatch(/exactly one of audioUrl or voiceId/i);
+      }
     });
 
     it('reports a blank voiceId with the shared empty message', () => {

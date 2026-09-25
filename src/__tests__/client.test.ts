@@ -492,6 +492,10 @@ describe('PostEngineerClient', () => {
     const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
     const payload = JSON.parse(fetchBody.body);
     expect(payload.personaId).toBe('persona-123');
+    // undefined values are dropped by JSON.stringify: the persona request
+    // shape carries no faceless-only fields.
+    expect(payload).not.toHaveProperty('voice_id');
+    expect(payload).not.toHaveProperty('video_subject');
     expect(vi.mocked(global.fetch)).toHaveBeenCalled();
   });
 

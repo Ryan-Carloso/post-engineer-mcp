@@ -51,6 +51,11 @@ export const PROVIDERS_REQUIRED_MESSAGE = 'At least one provider required';
 export const SCHEDULED_AT_REQUIRED_MESSAGE =
   'scheduledAt is required (ISO date time, between 24h and 30 days in the future)';
 
+/** e.g. 'audioUrl must be a string' — non-string input from untyped callers, both layers. */
+export function stringFieldMessage(field: string): string {
+  return `${field} must be a string`;
+}
+
 export interface ProviderAccountIssue {
   provider: ScheduleProvider;
   field: ProviderAccountIdsField;

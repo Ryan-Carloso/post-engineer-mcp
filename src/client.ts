@@ -18,6 +18,7 @@ import {
   isScheduleProvider,
   isValidHttpUrl,
   providerAccountIdsField,
+  stringFieldMessage,
   trimOptionalString,
 } from './shared.js';
 
@@ -327,7 +328,7 @@ export class PostEngineerClient {
       ['videoSubject', input.videoSubject],
     ] as const) {
       if (value !== undefined && typeof value !== 'string') {
-        throw new Error(`${name} must be a string`);
+        throw new Error(stringFieldMessage(name));
       }
     }
     if (typeof input.personaId === 'string' && input.personaId.trim() === '') {
@@ -370,6 +371,10 @@ export class PostEngineerClient {
       headers: this.getHeaders(),
       body: JSON.stringify({
         personaId,
+        // A blank scriptPrompt is normalized to undefined (dropped), not an
+        // error: unlike the validated fields above, an empty override is
+        // meaningless rather than invalid. undefined values are omitted by
+        // JSON.stringify, as are voice_id/video_subject in persona mode.
         video_script_prompt: trimOptionalString(input.scriptPrompt),
         audio_url: audioUrl,
         // Guarded above: voiceId is only present for faceless generation.
