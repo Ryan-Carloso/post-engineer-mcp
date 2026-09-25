@@ -10,7 +10,8 @@ export const MAX_BATCH_ITEMS = 30;
 // raw input (see the timezone field below): canonicalizing them would silently
 // rewrite a fixed-offset zone to a DST-observing one (e.g. PST ->
 // America/Los_Angeles).
-const LEGACY_FIXED_OFFSET_ALIAS = /^(EST|MST|HST|PST|EST5EDT|CST6CDT|MST7MDT|PST8PDT)$/i;
+const LEGACY_FIXED_OFFSET_ALIAS =
+  /^(EST|MST|HST|PST|CST|EST5EDT|CST6CDT|MST7MDT|PST8PDT|AKST|AKDT|HAST|HADT)$/i;
 
 // IANA timezone check. UTC-offset strings ("+05:30", "+05") and GMT/UTC
 // offset aliases ("GMT+5") are rejected explicitly first. Otherwise the input

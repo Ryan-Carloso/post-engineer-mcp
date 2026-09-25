@@ -110,7 +110,7 @@ describe('ScheduleVideoBatchSchema', () => {
     },
   );
 
-  it.each(['EST', 'PST', 'MST', 'EST5EDT'])(
+  it.each(['EST', 'PST', 'MST', 'CST', 'EST5EDT', 'AKST', 'AKDT'])(
     'rejects the legacy fixed-offset alias %s',
     (timezone) => {
       const result = ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone });
@@ -404,6 +404,16 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     expect(err.message.length).toBeLessThan(1000);
     expect(err.message).toContain('x'.repeat(500));
     expect(err.message).not.toContain('x'.repeat(501));
+  });
+
+  it('aborts a hanging request and includes the retry hazard', async () => {
+    const abortError = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(abortError));
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(
+      /network error.*check list_schedules before retrying/,
+    );
   });
 
   it('includes the retry hazard on a network error', async () => {

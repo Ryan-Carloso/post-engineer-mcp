@@ -511,7 +511,7 @@ export async function handleScheduleVideoBatch(
       content: [
         {
           type: 'text',
-          text: `Error scheduling video batch: ${(error as Error).message}`,
+          text: `Error scheduling video batch: ${error instanceof Error ? error.message : String(error)}`,
         },
       ],
       isError: true,

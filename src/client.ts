@@ -363,6 +363,9 @@ export class PostEngineerClient {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(input),
+        // A hanging server must not block the tool call forever; an abort
+        // lands in the network-error catch below with the retry hazard.
+        signal: AbortSignal.timeout(60_000),
       });
     } catch (err) {
       throw new Error(
