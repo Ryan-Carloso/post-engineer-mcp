@@ -55,6 +55,34 @@ export const CancelScheduleSchema = z.object({
 
 export const GetTokenBalanceSchema = z.object({});
 
+type ParsedArgs<T> = { data: T; error?: undefined } | { data?: undefined; error: McpToolResponse };
+
+/**
+ * Enforce a schema's cross-field rules (superRefine) and convert failures
+ * into an MCP error response. The SDK only validates the raw shape at the
+ * tool boundary, so handlers are the enforcement point for every transport.
+ */
+function parseArgsOrError<Input, Output>(
+  schema: z.ZodType<Output, z.ZodTypeDef, Input>,
+  args: Input
+): ParsedArgs<Output> {
+  const parsed = schema.safeParse(args);
+  if (!parsed.success) {
+    return {
+      error: {
+        content: [
+          {
+            type: 'text',
+            text: `Invalid arguments: ${parsed.error.issues.map((i) => i.message).join('; ')}`,
+          },
+        ],
+        isError: true,
+      },
+    };
+  }
+  return { data: parsed.data };
+}
+
 export const GenerateVideoObject = z.object({
   personaId: z.string().min(1, 'personaId is required').optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
   scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
@@ -74,8 +102,8 @@ export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) =>
   if (!val.personaId && !val.audioUrl && !val.voiceId) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Faceless generation requires audioUrl or voiceId (or provide personaId)',
-      path: ['personaId'],
+      message: 'Faceless generation requires exactly one of audioUrl or voiceId (or provide personaId)',
+      path: ['audioUrl'],
     });
     return;
   }
@@ -468,18 +496,8 @@ export async function handleGenerateVideo(
   // Cross-field rules (faceless needs a voice source; exactly one of
   // audioUrl/voiceId) live on the schema — the SDK only checks the raw
   // shape, so enforce them here for every transport.
-  const parsed = GenerateVideoSchema.safeParse(args);
-  if (!parsed.success) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Invalid arguments: ${parsed.error.issues.map((i) => i.message).join('; ')}`,
-        },
-      ],
-      isError: true,
-    };
-  }
+  const parsed = parseArgsOrError(GenerateVideoSchema, args);
+  if (parsed.error) return parsed.error;
   try {
     const result = await client.generateVideoJob(parsed.data);
     return {
@@ -537,18 +555,8 @@ export async function handleScheduleVideo(
   // Cross-field rule (each declared provider needs its account IDs) lives
   // on the schema — the SDK only checks the raw shape, so enforce it here
   // for every transport.
-  const parsed = ScheduleVideoSchema.safeParse(args);
-  if (!parsed.success) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Invalid arguments: ${parsed.error.issues.map((i) => i.message).join('; ')}`,
-        },
-      ],
-      isError: true,
-    };
-  }
+  const parsed = parseArgsOrError(ScheduleVideoSchema, args);
+  if (parsed.error) return parsed.error;
   try {
     const result = await client.createSchedule(parsed.data);
     return {

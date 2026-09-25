@@ -17,6 +17,11 @@ export interface CreatePersonaInput {
   faceQuality?: 'ok' | 'very_good';
 }
 
+/**
+ * Input for generating a video job. Omit personaId for faceless generation,
+ * which requires exactly one of audioUrl or voiceId (never both); the server
+ * rejects invalid combinations. voiceId is ignored when personaId is provided.
+ */
 export interface GenerateVideoJobInput {
   personaId?: string;
   scriptPrompt?: string;
