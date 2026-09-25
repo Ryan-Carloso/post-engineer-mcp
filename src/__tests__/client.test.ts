@@ -662,6 +662,30 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('rejects a blank personaId without calling API', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.createSchedule({
+        personaId: '   ',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+      })
+    ).rejects.toThrow(/personaId is required/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('accepts padded provider names and trims them', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    global.fetch = fetchMock;
+    await client.createSchedule({
+      personaId: 'persona-123',
+      providers: [' youtube ' as unknown as 'youtube'],
+      youtubeAccountIds: ['yt-1'],
+    });
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body);
+    expect(body.providers).toEqual(['youtube']);
+  });
+
   it('reports every missing provider at once', async () => {
     global.fetch = vi.fn();
     const error = await client

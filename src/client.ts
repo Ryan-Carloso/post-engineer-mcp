@@ -7,6 +7,7 @@ import {
   SCHEDULE_PROVIDER_NAMES,
   findProvidersMissingAccountIds,
   hasExactlyOneVoiceSource,
+  isScheduleProvider,
   isValidHttpUrl,
   providerAccountIdsField,
   trimOptionalString,
@@ -371,6 +372,13 @@ export class PostEngineerClient {
   }
 
   async createSchedule(input: CreateScheduleInput): Promise<unknown> {
+    // Mirror generateVideoJob's hardening: a blank or non-string personaId
+    // fails fast here instead of server-side.
+    if (typeof input.personaId !== 'string' || input.personaId.trim() === '') {
+      throw new Error('personaId is required');
+    }
+    const personaId = input.personaId.trim();
+
     if (input.scheduledAt) {
       const validation = validateScheduleAdvance(input.scheduledAt, input._nowForTesting);
       if (!validation.isValid) {
@@ -386,12 +394,17 @@ export class PostEngineerClient {
     if (!Array.isArray(input.providers) || input.providers.length === 0) {
       throw new Error('providers must be a non-empty array');
     }
-    for (const provider of input.providers) {
-      if (!(SCHEDULE_PROVIDER_NAMES as readonly string[]).includes(provider)) {
+    // Trim provider names before the membership check: ' youtube ' is
+    // accepted, consistent with the whitespace tolerance elsewhere.
+    const providers: ScheduleProvider[] = [];
+    for (const raw of input.providers) {
+      const provider = typeof raw === 'string' ? raw.trim() : raw;
+      if (!isScheduleProvider(provider)) {
         throw new Error(
           `Unknown provider '${String(provider)}'. Must be one of: ${SCHEDULE_PROVIDER_NAMES.join(', ')}`
         );
       }
+      providers.push(provider);
     }
     // Shape + element validation for every account-ID field (declared or
     // not), mirroring the schema's array(z.string().trim().min(1)): a
@@ -412,7 +425,7 @@ export class PostEngineerClient {
         }
       }
     }
-    const missingAccountIds = findProvidersMissingAccountIds(input.providers, (field) => input[field]);
+    const missingAccountIds = findProvidersMissingAccountIds(providers, (field) => input[field]);
     if (missingAccountIds.length > 0) {
       // Report every missing provider at once, like the schema's superRefine,
       // so callers don't fix one error at a time.
@@ -433,12 +446,12 @@ export class PostEngineerClient {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({
-        personaId: input.personaId,
+        personaId,
         // Deduplicated: the MCP path's zod shape doesn't dedupe either, but
         // sending each provider once is the sane request body. Only known
         // account-ID fields are spread above, so extraneous keys from
         // untyped callers never reach the request body.
-        providers: [...new Set(input.providers)],
+        providers: [...new Set(providers)],
         ...accountIds,
         scheduledAt: input.scheduledAt,
         daysOfWeek: input.daysOfWeek,

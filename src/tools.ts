@@ -160,7 +160,7 @@ const accountIdsShape = {
 } satisfies Record<ProviderAccountIdsField, z.ZodTypeAny>;
 
 export const ScheduleVideoObject = z.object({
-  personaId: z.string().min(1, 'personaId is required'),
+  personaId: z.string().trim().min(1, 'personaId is required'),
   providers: ScheduleProvidersSchema.describe('Target social platforms'),
   ...accountIdsShape,
   scheduledAt: z.string().describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),

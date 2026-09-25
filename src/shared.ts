@@ -20,6 +20,11 @@ export function providerDisplayName(provider: ScheduleProvider): string {
   return provider[0].toUpperCase() + provider.slice(1);
 }
 
+/** Type guard for untyped callers: is this a known schedule provider? */
+export function isScheduleProvider(value: unknown): value is ScheduleProvider {
+  return typeof value === 'string' && (SCHEDULE_PROVIDER_NAMES as readonly string[]).includes(value);
+}
+
 export interface ProviderAccountIssue {
   provider: ScheduleProvider;
   field: ProviderAccountIdsField;
