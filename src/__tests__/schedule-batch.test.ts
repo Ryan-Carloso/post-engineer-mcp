@@ -469,6 +469,29 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     );
   });
 
+  it('truncates oversized backend error text in the success:false path', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: false,
+            error: 'x'.repeat(5000),
+            code: 'y'.repeat(500),
+          }),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    const err = await client.scheduleVideoBatch(validArgs).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    const message = (err as Error).message;
+    expect(message.length).toBeLessThan(1000);
+    expect(message).toMatch(/Failed to schedule video batch:/);
+  });
+
   it.each([0, 4.5])('rejects a 200 response with tokensSpent: %s as an unexpected shape', async (tokensSpent) => {
     vi.stubGlobal(
       'fetch',
