@@ -14,6 +14,7 @@ import {
   VOICE_ID_EMPTY_MESSAGE,
   accountIdElementMessage,
   accountIdFieldTypeMessage,
+  formatValidationIssues,
   isScheduleProvider,
   isValidHttpUrl,
   providerAccountIdsField,
@@ -362,7 +363,9 @@ export class PostEngineerClient {
     // applicable issue is reported at once, like the schema's superRefine.
     const issues = validateGenerateVideoFields({ personaId, audioUrl, voiceId, videoSubject });
     if (issues.length > 0) {
-      throw new Error(issues.map((issue) => issue.message).join('; '));
+      // Same formatting as the MCP transport (parseArgsOrError), so both
+      // layers report the same text for the same input.
+      throw new Error(formatValidationIssues(issues));
     }
     const url = `${this.baseUrl}/api/persona/video-job`;
     const response = await fetch(url, {
@@ -486,8 +489,9 @@ export class PostEngineerClient {
     });
     if (missingAccountIds.length > 0) {
       // Report every missing provider at once, like the schema's superRefine,
-      // so callers don't fix one error at a time.
-      throw new Error(missingAccountIds.map((issue) => issue.message).join('; '));
+      // so callers don't fix one error at a time. Same formatting as the MCP
+      // transport (parseArgsOrError).
+      throw new Error(formatValidationIssues(missingAccountIds));
     }
     // Fail-fast guards for the optional schedule-window fields, mirroring
     // the ScheduleVideoObject zod bounds: untyped JS callers get a clear

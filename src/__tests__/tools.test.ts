@@ -16,7 +16,7 @@ import {
   GenerateVideoSchema,
   ScheduleVideoSchema,
 } from '../tools.js';
-import { validateScheduleFields } from '../shared.js';
+import { validateScheduleFields, formatValidationIssues } from '../shared.js';
 import type { PostEngineerClient } from '../client.js';
 
 describe('MCP Tool Handlers', () => {
@@ -332,7 +332,45 @@ describe('MCP Tool Handlers', () => {
       );
     });
 
-    it('trims a padded timezone and rejects a blank one, like the client', () => {
+    it('does not add cross-field issues when a schedule field-level rule fails', () => {
+    // Same fail-fast parity as GenerateVideoSchema: a blank personaId is
+    // the real problem, so no per-provider account-ID issues are added.
+    const result = ScheduleVideoSchema.safeParse({
+      personaId: '  ',
+      providers: ['youtube'],
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+    });
+    expect(result.success).toBe(false);
+    if (result.success) {
+      return;
+    }
+    expect(result.error.issues.map((issue) => issue.message)).toEqual([
+      'personaId is required',
+    ]);
+  });
+
+  it('formats multi-issue errors identically to the direct client', () => {
+    // The MCP transport (parseArgsOrError) and the direct client both use
+    // formatValidationIssues, so the same invalid input yields the same text.
+    const mcp = ScheduleVideoSchema.safeParse({
+      personaId: 'persona-123',
+      providers: ['youtube', 'instagram'],
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+    });
+    expect(mcp.success).toBe(false);
+    if (mcp.success) {
+      return;
+    }
+    const clientIssues = validateScheduleFields({
+      providers: ['youtube', 'instagram'],
+      accountIds: () => undefined,
+    });
+    expect(`Invalid arguments: ${formatValidationIssues(mcp.error.issues)}`).toBe(
+      `Invalid arguments: ${formatValidationIssues(clientIssues)}`
+    );
+  });
+
+  it('trims a padded timezone and rejects a blank one, like the client', () => {
     const padded = ScheduleVideoSchema.safeParse({
       personaId: 'persona-123',
       providers: ['youtube'],

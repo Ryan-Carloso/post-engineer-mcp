@@ -211,6 +211,21 @@ export interface GenerateVideoIssue {
 }
 
 /**
+ * Format validation issues identically on every surface: each issue as
+ * `path.to.field: message` (path omitted when empty), joined with '; '.
+ * Used by the direct client (thrown errors) and the MCP transport
+ * (parseArgsOrError), so both layers report the same text for the same
+ * input. Accepts zod issues too (their paths may contain numbers).
+ */
+export function formatValidationIssues(
+  issues: ReadonlyArray<{ path: ReadonlyArray<string | number>; message: string }>
+): string {
+  return issues
+    .map((issue) => [issue.path.join('.'), issue.message].filter(Boolean).join(': '))
+    .join('; ');
+}
+
+/**
  * Cross-field rules for video generation, shared by the MCP schema's
  * superRefine and the direct client's fail-fast guards so a rule change
  * can't be made in one layer but not the other.

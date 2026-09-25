@@ -13,6 +13,7 @@ import {
   VOICE_ID_EMPTY_MESSAGE,
   accountIdElementMessage,
   accountIdFieldTypeMessage,
+  formatValidationIssues,
   isValidHttpUrl,
   providerAccountIdsField,
   stringFieldMessage,
@@ -95,9 +96,10 @@ function parseArgsOrError<Input, Output>(
         content: [
           {
             type: 'text',
-            text: `Invalid arguments: ${parsed.error.issues
-              .map((i) => [i.path.join('.'), i.message].filter(Boolean).join(': '))
-              .join('; ')}`,
+            // Same formatting as the direct client's thrown errors
+            // (formatValidationIssues), so both layers report the same
+            // text for the same input.
+            text: `Invalid arguments: ${formatValidationIssues(parsed.error.issues)}`,
           },
         ],
         isError: true,
@@ -236,6 +238,13 @@ export const ScheduleVideoObject = z.object({
 });
 
 export const ScheduleVideoSchema = ScheduleVideoObject.superRefine((val, ctx) => {
+  // Same fail-fast parity guard as GenerateVideoSchema: skip cross-field
+  // rules when field-level validation already failed, so callers don't see
+  // misleading extra issues on top of the real problem. Derived from the
+  // base object's field chains, not hand-mirrored.
+  if (!ScheduleVideoObject.safeParse(val).success) {
+    return;
+  }
   // Cross-field rules are shared with the direct client
   // (validateScheduleFields) so the layers can't diverge; the schema only
   // maps each issue to a zod issue with its path.
