@@ -367,12 +367,24 @@ export class PostEngineerClient {
       throw new Error(`Failed to schedule video batch: ${response.status} ${errorText}`);
     }
 
-    const body = (await response.json()) as { success?: unknown; error?: unknown; code?: unknown };
+    let body: { success?: unknown; error?: unknown; code?: unknown; scheduleId?: unknown };
+    try {
+      body = (await response.json()) as typeof body;
+    } catch (err) {
+      throw new Error(
+        `Failed to schedule video batch: could not parse the response body as JSON (${err instanceof Error ? err.message : String(err)})`,
+      );
+    }
+
     if (body !== null && typeof body === 'object' && body.success === false) {
       const detail =
         typeof body.error === 'string' && body.error.length > 0 ? body.error : 'batch rejected';
       const code = typeof body.code === 'string' && body.code.length > 0 ? ` (${body.code})` : '';
       throw new Error(`Failed to schedule video batch: ${detail}${code}`);
+    }
+
+    if (typeof body.scheduleId !== 'string' || body.scheduleId.length === 0) {
+      throw new Error('Failed to schedule video batch: response was missing the scheduleId');
     }
 
     return body;

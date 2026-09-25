@@ -61,6 +61,11 @@ describe('ScheduleVideoBatchSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('rejects a whitespace-only personaId', () => {
+    const result = ScheduleVideoBatchSchema.safeParse({ ...validArgs, personaId: '   ' });
+    expect(result.success).toBe(false);
+  });
+
   it('rejects a non-IANA timezone', () => {
     const result = ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: 'Not/AZone' });
     expect(result.success).toBe(false);
@@ -161,6 +166,34 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
 
     const client = new PostEngineerClient({ apiKey: 'key' });
     await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/batch rejected/);
+  });
+
+  it('throws a clear error when the 200 body is not valid JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.reject(new SyntaxError('Unexpected end of JSON input')),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(
+      /could not parse the response body as JSON/,
+    );
+  });
+
+  it('throws when a 200 success response is missing scheduleId', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/missing the scheduleId/);
   });
 
   it('uses the code when success: false has a code but no error', async () => {

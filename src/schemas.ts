@@ -23,7 +23,7 @@ const isIanaTimezone = (tz: string): boolean => {
 };
 
 export const scheduleVideoBatchParams = {
-  personaId: z.string().min(1, 'personaId is required').describe('The ID of the persona'),
+  personaId: z.string().trim().min(1, 'personaId is required').describe('The ID of the persona'),
   items: z
     .array(
       z.object({
