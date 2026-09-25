@@ -1,6 +1,11 @@
 import { validateScheduleAdvance } from './validator.js';
 import type { ScheduleProvider } from './tools.js';
-import { FACELESS_VOICE_MESSAGE, SCHEDULE_PROVIDER_NAMES } from './tools.js';
+import {
+  FACELESS_VOICE_MESSAGE,
+  PERSONA_VOICE_ID_MESSAGE,
+  SCHEDULE_PROVIDER_NAMES,
+  hasExactlyOneVoiceSource,
+} from './tools.js';
 
 export interface PostEngineerClientOptions {
   apiKey?: string;
@@ -22,7 +27,7 @@ export interface CreatePersonaInput {
 /**
  * Input for generating a video job. Omit personaId for faceless generation,
  * which requires exactly one of audioUrl or voiceId (never both); the server
- * rejects invalid combinations. voiceId is ignored when personaId is provided.
+ * rejects invalid combinations. voiceId is rejected when personaId is provided.
  */
 export interface GenerateVideoJobInput {
   personaId?: string;
@@ -288,10 +293,14 @@ export class PostEngineerClient {
   }
 
   async generateVideoJob(input: GenerateVideoJobInput): Promise<unknown> {
-    // Fail fast for direct (non-MCP) callers: the server requires exactly one
-    // voice source for faceless generation and rejects anything else.
-    if (!input.personaId && Boolean(input.audioUrl) === Boolean(input.voiceId)) {
+    // Fail fast for direct (non-MCP) callers, mirroring the MCP schema rules:
+    // faceless generation needs exactly one voice source, and voiceId is
+    // rejected alongside personaId. The server rejects invalid combinations.
+    if (!input.personaId && !hasExactlyOneVoiceSource(input.audioUrl, input.voiceId)) {
       throw new Error(FACELESS_VOICE_MESSAGE);
+    }
+    if (input.personaId && input.voiceId) {
+      throw new Error(PERSONA_VOICE_ID_MESSAGE);
     }
     const url = `${this.baseUrl}/api/persona/video-job`;
     const response = await fetch(url, {
@@ -301,9 +310,8 @@ export class PostEngineerClient {
         personaId: input.personaId,
         video_script_prompt: input.scriptPrompt,
         audio_url: input.audioUrl,
-        // voice_id is a faceless-generation voice source; the server ignores
-        // it when personaId is present, so don't send it then.
-        voice_id: input.personaId ? undefined : input.voiceId,
+        // Guarded above: voiceId is only present for faceless generation.
+        voice_id: input.voiceId,
       }),
     });
 

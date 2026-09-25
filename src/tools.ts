@@ -96,6 +96,19 @@ export const FACELESS_VOICE_RULE = 'exactly one of audioUrl or voiceId';
 /** Full message for the faceless voice-source rule, shared with the client's fail-fast guard. */
 export const FACELESS_VOICE_MESSAGE = `Faceless generation requires ${FACELESS_VOICE_RULE} (or provide personaId)`;
 
+/** Message for voiceId supplied alongside personaId, shared with the client's fail-fast guard. */
+export const PERSONA_VOICE_ID_MESSAGE =
+  'voiceId is only used for faceless generation; remove voiceId when personaId is provided';
+
+/**
+ * True when exactly one faceless voice source is provided (audioUrl xor voiceId).
+ * Shared by the schema refinement and the client's fail-fast guard so the rule
+ * cannot drift between the two.
+ */
+export function hasExactlyOneVoiceSource(audioUrl?: string, voiceId?: string): boolean {
+  return Boolean(audioUrl) !== Boolean(voiceId);
+}
+
 export const GenerateVideoObject = z.object({
   personaId: z.string().min(1, 'personaId is required').optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
   scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
@@ -105,37 +118,31 @@ export const GenerateVideoObject = z.object({
     .regex(/^https?:\/\//i, 'audioUrl must be an http(s) URL')
     .optional()
     .describe(
-      `Public URL of custom audio for this video. With a persona it overrides the persona voice; for faceless generation provide ${FACELESS_VOICE_RULE}.`
+      'Public URL of custom audio for this video. With a persona it overrides the persona voice; for faceless generation, provide this or voiceId (not both).'
     ),
   voiceId: z
     .string()
     .min(1)
     .optional()
     .describe(
-      `Voice ID for this video (see list_voices). Only used for faceless generation (rejected when personaId is provided); for faceless generation provide ${FACELESS_VOICE_RULE}.`
+      'Voice ID for this video (see list_voices). Only used for faceless generation (rejected when personaId is provided); provide this or audioUrl, not both.'
     ),
 });
 
 export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) => {
-  if (!val.personaId && !val.audioUrl && !val.voiceId) {
+  if (!val.personaId && !hasExactlyOneVoiceSource(val.audioUrl, val.voiceId)) {
+    const neither = !val.audioUrl && !val.voiceId;
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: FACELESS_VOICE_MESSAGE,
-      path: [],
+      message: neither ? FACELESS_VOICE_MESSAGE : `Faceless generation needs ${FACELESS_VOICE_RULE}, not both`,
+      path: neither ? [] : ['voiceId'],
     });
     return;
-  }
-  if (!val.personaId && val.audioUrl && val.voiceId) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `Faceless generation needs ${FACELESS_VOICE_RULE}, not both`,
-      path: ['voiceId'],
-    });
   }
   if (val.personaId && val.voiceId) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'voiceId is only used for faceless generation; remove voiceId when personaId is provided',
+      message: PERSONA_VOICE_ID_MESSAGE,
       path: ['voiceId'],
     });
   }
@@ -519,6 +526,8 @@ export async function handleGetTokenBalance(
 
 export async function handleGenerateVideo(
   client: PostEngineerClient,
+  // Note: typed as the parsed schema output, but at the transport boundary the
+  // SDK hands us the raw, unparsed args — re-parsed below via parseArgsOrError.
   args: z.infer<typeof GenerateVideoSchema>
 ): Promise<McpToolResponse> {
   // Cross-field rules (faceless needs a voice source; exactly one of
@@ -578,6 +587,8 @@ export async function handleGetVideoStatus(
 
 export async function handleScheduleVideo(
   client: PostEngineerClient,
+  // Note: typed as the parsed schema output, but at the transport boundary the
+  // SDK hands us the raw, unparsed args — re-parsed below via parseArgsOrError.
   args: z.infer<typeof ScheduleVideoSchema>
 ): Promise<McpToolResponse> {
   // Cross-field rule (each declared provider needs its account IDs) lives

@@ -439,28 +439,15 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('omits voice_id when a persona is used (the server ignores it)', async () => {
-    const mockJob = {
-      success: true,
-      taskId: 'task-voice-3',
-    };
-
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => mockJob,
-    });
-
-    const result = await client.generateVideoJob({
-      personaId: 'persona-123',
-      voiceId: 'voice-calm-1',
-    });
-
-    const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
-    const payload = JSON.parse(fetchBody.body);
-    expect(payload.personaId).toBe('persona-123');
-    expect(payload).not.toHaveProperty('voice_id');
-    expect(result).toEqual(mockJob);
+  it('throws when voiceId is used with a personaId', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.generateVideoJob({
+        personaId: 'persona-123',
+        voiceId: 'voice-calm-1',
+      })
+    ).rejects.toThrow(/only used for faceless generation/i);
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('retrieves video task status', async () => {
