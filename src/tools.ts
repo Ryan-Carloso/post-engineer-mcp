@@ -136,6 +136,29 @@ export const GenerateVideoObject = z.object({
 });
 
 export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) => {
+  // Fail-fast parity with the direct client: it throws the first
+  // field-level error and never reaches the cross-field rules, so the
+  // schema must not add cross-field issues on top of a field-level
+  // failure — otherwise MCP callers see extra, misleading issues for the
+  // same input (e.g. "videoSubject is required" for a request whose real
+  // problem is a blank personaId). The checks mirror the field chains
+  // above; every value is trimmed by the time superRefine runs. Non-string
+  // inputs reach here too (zod still runs superRefine when a field's
+  // invalid_type check fails), so the typeof guards mirror the client's
+  // type-guard loop.
+  const fieldLevelFailed =
+    (val.personaId !== undefined &&
+      (typeof val.personaId !== 'string' || val.personaId === '')) ||
+    (val.audioUrl !== undefined &&
+      (typeof val.audioUrl !== 'string' ||
+        val.audioUrl === '' ||
+        !isValidHttpUrl(val.audioUrl))) ||
+    (val.voiceId !== undefined &&
+      (typeof val.voiceId !== 'string' || val.voiceId === '')) ||
+    (val.videoSubject !== undefined && typeof val.videoSubject !== 'string');
+  if (fieldLevelFailed) {
+    return;
+  }
   // Cross-field rules are shared with the direct client
   // (validateGenerateVideoFields) so the layers can't diverge; the schema
   // only maps each issue to a zod issue with its path.

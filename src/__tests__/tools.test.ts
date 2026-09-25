@@ -332,7 +332,38 @@ describe('MCP Tool Handlers', () => {
       );
     });
 
-    it('reports non-array providers with the shared type message, like the client', () => {
+    it('does not add cross-field issues when a field-level rule fails, like the client', () => {
+    // The direct client throws the first field-level error and never
+    // reaches the cross-field rules; the schema must not report extra,
+    // misleading issues on top of the field-level failure.
+    const cases: Array<{ input: Record<string, unknown>; messages: string[] }> = [
+      {
+        // Blank personaId: only the personaId issue, not videoSubject/voice issues.
+        input: { personaId: '  ', videoSubject: '' },
+        messages: ['personaId is required'],
+      },
+      {
+        // Invalid audioUrl in faceless mode: only the URL issue.
+        input: { audioUrl: 'not-a-url' },
+        messages: ['audioUrl must be an http(s) URL'],
+      },
+      {
+        // Blank voiceId: only the voiceId issue.
+        input: { voiceId: '  ' },
+        messages: ['voiceId must not be empty'],
+      },
+    ];
+    for (const { input, messages } of cases) {
+      const result = GenerateVideoSchema.safeParse(input);
+      expect(result.success).toBe(false);
+      if (result.success) {
+        continue;
+      }
+      expect(result.error.issues.map((issue) => issue.message)).toEqual(messages);
+    }
+  });
+
+  it('reports non-array providers with the shared type message, like the client', () => {
     const result = ScheduleVideoSchema.safeParse({
       personaId: 'persona-123',
       providers: 'youtube',
