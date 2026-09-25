@@ -250,6 +250,19 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/unexpected shape.*tokensSpent/);
   });
 
+  it('rejects a 200 JSON-array body via shape validation', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([]),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/unexpected shape/);
+  });
+
   it('throws when a slot is missing its topic', async () => {
     vi.stubGlobal(
       'fetch',
