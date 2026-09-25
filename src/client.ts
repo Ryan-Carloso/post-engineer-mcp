@@ -376,15 +376,16 @@ export class PostEngineerClient {
         personaId,
         // A blank scriptPrompt normalizes to undefined (dropped), not an
         // error: unlike the validated fields above, an empty override is
-        // meaningless rather than invalid. undefined values are omitted by
-        // JSON.stringify; an explicit videoSubject alongside personaId is a
-        // topic override (the web prefers it over the persona's default
-        // niche) and is sent intentionally, not by accident.
+        // meaningless rather than invalid. A blank videoSubject already
+        // threw above (validateGenerateVideoFields), so videoSubject here
+        // is a non-empty topic override — the web prefers it over the
+        // persona's default niche — sent intentionally, not by accident;
+        // undefined values are omitted by JSON.stringify.
         video_script_prompt: scriptPrompt || undefined,
         audio_url: audioUrl,
         // Guarded above: voiceId is only present for faceless generation.
         voice_id: voiceId,
-        video_subject: videoSubject || undefined,
+        video_subject: videoSubject,
       }),
     });
 
@@ -509,6 +510,20 @@ export class PostEngineerClient {
     // the ScheduleVideoObject zod bounds: untyped JS callers get a clear
     // error here instead of an opaque server-side rejection. Bounds come
     // from SCHEDULE_WINDOW_BOUNDS, shared with the schema chains.
+    const assertWindowInteger = (
+      field: 'startHour' | 'endHour' | 'postsPerDay',
+      value: unknown
+    ): void => {
+      if (value === undefined) {
+        return;
+      }
+      const { min, max } =
+        field === 'postsPerDay' ? SCHEDULE_WINDOW_BOUNDS.postsPerDay : SCHEDULE_WINDOW_BOUNDS.hour;
+      const n = typeof value === 'number' ? value : NaN;
+      if (!Number.isInteger(n) || n < min || n > max) {
+        throw new Error(scheduleWindowMessage(field));
+      }
+    };
     if (input.daysOfWeek !== undefined) {
       const { min, max } = SCHEDULE_WINDOW_BOUNDS.dayOfWeek;
       const validDays =
@@ -518,22 +533,9 @@ export class PostEngineerClient {
         throw new Error(scheduleWindowMessage('daysOfWeek'));
       }
     }
-    for (const field of ['startHour', 'endHour'] as const) {
-      const { min, max } = SCHEDULE_WINDOW_BOUNDS.hour;
-      const value = input[field];
-      if (value !== undefined && (!Number.isInteger(value) || value < min || value > max)) {
-        throw new Error(scheduleWindowMessage(field));
-      }
-    }
-    {
-      const { min, max } = SCHEDULE_WINDOW_BOUNDS.postsPerDay;
-      if (
-        input.postsPerDay !== undefined &&
-        (!Number.isInteger(input.postsPerDay) || input.postsPerDay < min || input.postsPerDay > max)
-      ) {
-        throw new Error(scheduleWindowMessage('postsPerDay'));
-      }
-    }
+    assertWindowInteger('startHour', input.startHour);
+    assertWindowInteger('endHour', input.endHour);
+    assertWindowInteger('postsPerDay', input.postsPerDay);
     // Trimmed like every other string field here: a padded value (' UTC ')
     // is normalized, and an explicit blank is rejected rather than
     // silently disabling the 'UTC' default.
