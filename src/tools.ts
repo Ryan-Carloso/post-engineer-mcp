@@ -11,12 +11,12 @@ import {
   VOICE_ID_EMPTY_MESSAGE,
   accountIdElementMessage,
   accountIdFieldTypeMessage,
-  findProvidersMissingAccountIds,
   isValidHttpUrl,
   providerAccountIdsField,
   stringFieldMessage,
   unknownProviderMessage,
   validateGenerateVideoFields,
+  validateScheduleFields,
 } from './shared.js';
 import type { ProviderAccountIdsField } from './shared.js';
 
@@ -217,15 +217,14 @@ export const ScheduleVideoObject = z.object({
 });
 
 export const ScheduleVideoSchema = ScheduleVideoObject.superRefine((val, ctx) => {
-  // The per-provider account-ID rule lives in shared
-  // findProvidersMissingAccountIds so it cannot drift from the client's
-  // fail-fast guard.
-  for (const issue of findProvidersMissingAccountIds(val.providers, (field) => val[field])) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: issue.message,
-      path: [issue.field],
-    });
+  // Cross-field rules are shared with the direct client
+  // (validateScheduleFields) so the layers can't diverge; the schema only
+  // maps each issue to a zod issue with its path.
+  for (const issue of validateScheduleFields({
+    providers: val.providers,
+    accountIds: (field) => val[field],
+  })) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: issue.path, message: issue.message });
   }
 });
 

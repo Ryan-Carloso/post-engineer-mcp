@@ -12,7 +12,6 @@ import {
   VOICE_ID_EMPTY_MESSAGE,
   accountIdElementMessage,
   accountIdFieldTypeMessage,
-  findProvidersMissingAccountIds,
   isScheduleProvider,
   isValidHttpUrl,
   providerAccountIdsField,
@@ -20,6 +19,7 @@ import {
   stringFieldMessage,
   unknownProviderMessage,
   validateGenerateVideoFields,
+  validateScheduleFields,
 } from './shared.js';
 
 export interface PostEngineerClientOptions {
@@ -442,9 +442,9 @@ export class PostEngineerClient {
 
     // Mirror the MCP schema's superRefine rules and fail fast instead of
     // hitting the server (or throwing a TypeError). The per-provider
-    // account-ID rule itself lives in shared findProvidersMissingAccountIds;
-    // the shape checks below are untyped-JS-caller hardening that zod
-    // handles on the MCP path.
+    // account-ID rule itself lives in shared validateScheduleFields; the
+    // shape checks below are untyped-JS-caller hardening that zod handles
+    // on the MCP path.
     if (!Array.isArray(input.providers) || input.providers.length === 0) {
       throw new Error(PROVIDERS_REQUIRED_MESSAGE);
     }
@@ -477,7 +477,10 @@ export class PostEngineerClient {
         }
       }
     }
-    const missingAccountIds = findProvidersMissingAccountIds(providers, (field) => input[field]);
+    const missingAccountIds = validateScheduleFields({
+      providers,
+      accountIds: (field) => input[field],
+    });
     if (missingAccountIds.length > 0) {
       // Report every missing provider at once, like the schema's superRefine,
       // so callers don't fix one error at a time.

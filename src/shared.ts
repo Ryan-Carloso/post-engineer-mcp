@@ -104,6 +104,35 @@ export function findProvidersMissingAccountIds(
 /** Shared wording for the faceless voice-source rule. */
 export const FACELESS_VOICE_RULE = 'exactly one of audioUrl or voiceId';
 
+/** Normalized schedule fields for cross-field validation. */
+export interface ScheduleFields {
+  providers: ScheduleProvider[];
+  accountIds: (field: ProviderAccountIdsField) => readonly string[] | undefined;
+}
+
+/** One schedule cross-field rule violation: message plus the schema path. */
+export interface ScheduleFieldIssue {
+  path: string[];
+  message: string;
+}
+
+/**
+ * Cross-field rules for schedule creation, shared by the MCP schema's
+ * superRefine and the direct client's fail-fast guards so a rule change
+ * can't be made in one layer but not the other. Providers are already
+ * normalized (trimmed, deduped, membership-checked) when this runs. The
+ * non-empty-providers rule is intentionally not here: it's a single-field
+ * rule, so it lives on the field itself (schema min(1), which also
+ * advertises minItems, and the client's length check) with the shared
+ * PROVIDERS_REQUIRED_MESSAGE.
+ */
+export function validateScheduleFields(fields: ScheduleFields): ScheduleFieldIssue[] {
+  return findProvidersMissingAccountIds(fields.providers, fields.accountIds).map((issue) => ({
+    path: [issue.field],
+    message: issue.message,
+  }));
+}
+
 /** Full message for the faceless voice-source rule, shared with the client's fail-fast guard. */
 export const FACELESS_VOICE_MESSAGE = `Faceless generation requires ${FACELESS_VOICE_RULE} (or provide personaId)`;
 

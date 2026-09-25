@@ -16,6 +16,7 @@ import {
   GenerateVideoSchema,
   ScheduleVideoSchema,
 } from '../tools.js';
+import { validateScheduleFields } from '../shared.js';
 import type { PostEngineerClient } from '../client.js';
 
 describe('MCP Tool Handlers', () => {
@@ -615,6 +616,31 @@ describe('MCP Tool Handlers', () => {
       "Invalid arguments: youtubeAccountIds: providers includes 'youtube' but youtubeAccountIds is empty"
     );
     expect(mockClient.createSchedule).not.toHaveBeenCalled();
+  });
+
+  it('ScheduleVideoSchema superRefine delegates to the shared schedule validator', () => {
+    // validateScheduleFields is the single source of truth for the
+    // per-provider account-ID rule: the schema only maps its issues to zod
+    // issues, so both layers surface the same messages.
+    const schemaResult = ScheduleVideoSchema.safeParse({
+      personaId: 'persona-123',
+      providers: ['youtube', 'bluesky'],
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+    });
+    expect(schemaResult.success).toBe(false);
+    if (schemaResult.success) {
+      return;
+    }
+    expect(schemaResult.error.issues.map((i) => [i.path.join('.'), i.message])).toEqual(
+      validateScheduleFields({
+        providers: ['youtube', 'bluesky'],
+        accountIds: () => undefined,
+      }).map((i) => [i.path.join('.'), i.message])
+    );
+    expect(schemaResult.error.issues.map((i) => i.message)).toEqual([
+      "providers includes 'youtube' but youtubeAccountIds is empty",
+      "providers includes 'bluesky' but blueskyAccountIds is empty",
+    ]);
   });
 
   it('handleConnectAccount returns the OAuth authorization URL with instructions', async () => {
