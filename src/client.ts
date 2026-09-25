@@ -371,10 +371,14 @@ export class PostEngineerClient {
     }
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `Failed to schedule video batch: ${response.status} ${errorText}; the batch may still have been created — check list_schedules before retrying`,
-      );
+      // 4xx means the backend definitively rejected the batch (nothing was
+      // created or charged); only 5xx leaves the outcome uncertain.
+      const errorText = (await response.text()).slice(0, 500);
+      const hazard =
+        response.status >= 500
+          ? '; the batch may still have been created — check list_schedules before retrying'
+          : '';
+      throw new Error(`Failed to schedule video batch: ${response.status} ${errorText}${hazard}`);
     }
 
     let body: unknown;

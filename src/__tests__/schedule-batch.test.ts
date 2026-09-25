@@ -103,9 +103,12 @@ describe('ScheduleVideoBatchSchema', () => {
     ).toBe(true);
   });
 
-  it.each(['EST', 'PST'])('rejects the ICU legacy alias %s', (timezone) => {
-    expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone }).success).toBe(false);
-  });
+  it.each(['EST', 'PST', 'US/Pacific', 'utc', 'america/new_york'])(
+    'resolves %s to its canonical IANA zone',
+    (timezone) => {
+      expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone }).success).toBe(true);
+    },
+  );
 
   it.each(['+05:30', '+0530', '-08:00', '+05', '-08', 'GMT+5'])('rejects UTC-offset string %s as timezone', (timezone) => {
     const result = ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone });
@@ -306,6 +309,40 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(
       /check list_schedules before retrying/,
     );
+  });
+
+  it('does not include the retry hazard on a definitive 400 rejection', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        text: () => Promise.resolve('INSUFFICIENT_TOKENS: nope'),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow('INSUFFICIENT_TOKENS');
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.not.toThrow(
+      /check list_schedules/,
+    );
+  });
+
+  it('truncates long backend error bodies', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve('x'.repeat(5000)),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    const err = await client.scheduleVideoBatch(validArgs).catch((e: Error) => e);
+    expect(err.message.length).toBeLessThan(1000);
+    expect(err.message).toContain('x'.repeat(500));
+    expect(err.message).not.toContain('x'.repeat(501));
   });
 
   it('includes the retry hazard on a network error', async () => {

@@ -6,32 +6,35 @@ import { z } from 'zod';
 
 export const MAX_BATCH_ITEMS = 30;
 
-// IANA timezone check. Where available, Intl.supportedValuesOf('timeZone')
-// is the primary check: it lists canonical IANA zone IDs and excludes the
-// legacy aliases (EST, PST, ...) that the Intl constructor accepts on some
-// ICU builds. UTC-offset strings ("+05:30", "+05") and GMT/UTC offset aliases
-// ("GMT+5") are rejected explicitly first. 'UTC' is a valid IANA zone but is
-// missing from supportedValuesOf on some builds, so it is allowed explicitly.
-// On runtimes without supportedValuesOf, fall back to the constructor check.
+// IANA timezone check. UTC-offset strings ("+05:30", "+05") and GMT/UTC
+// offset aliases ("GMT+5") are rejected explicitly first. Otherwise the input
+// is canonicalized via resolvedOptions().timeZone (so links like
+// "US/Pacific" and any casing like "utc" resolve to their canonical IDs) and
+// the canonical ID is validated against Intl.supportedValuesOf('timeZone')
+// where available. 'UTC' is a valid IANA zone but is missing from
+// supportedValuesOf on some builds, so it is allowed explicitly. On runtimes
+// without supportedValuesOf, the constructor check alone decides.
 const isIanaTimezone = (tz: string): boolean => {
   if (/^[+-]\d{1,2}(:?\d{2})?$/.test(tz)) return false;
   if (/^(?:GMT|UTC)[+-]\d{1,2}(:?\d{2})?$/i.test(tz)) return false;
+  let canonical: string;
+  try {
+    canonical = new Intl.DateTimeFormat('en', { timeZone: tz }).resolvedOptions().timeZone;
+  } catch {
+    return false;
+  }
+  if (canonical === 'UTC') return true;
   const supportedValuesOf = (
     Intl as unknown as { supportedValuesOf?: (key: string) => string[] }
   ).supportedValuesOf;
   if (typeof supportedValuesOf === 'function') {
     try {
-      return tz === 'UTC' || supportedValuesOf('timeZone').includes(tz);
+      return supportedValuesOf('timeZone').includes(canonical);
     } catch {
-      // fall through to the constructor check
+      // fall through to the constructor result
     }
   }
-  try {
-    new Intl.DateTimeFormat('en', { timeZone: tz });
-    return true;
-  } catch {
-    return false;
-  }
+  return true;
 };
 
 export const scheduleVideoBatchParams = {
@@ -69,7 +72,7 @@ export const scheduleVideoBatchParams = {
     .string()
     .min(1, 'timezone is required')
     .refine(isIanaTimezone, 'timezone must be a valid IANA timezone')
-    .describe('IANA timezone for the times, e.g. "Europe/Lisbon"'),
+    .describe('Canonical IANA timezone for the times, e.g. "Europe/Lisbon" (aliases and any casing are resolved to their canonical ID)'),
 };
 
 export const ScheduleVideoBatchSchema = z.object(scheduleVideoBatchParams);
