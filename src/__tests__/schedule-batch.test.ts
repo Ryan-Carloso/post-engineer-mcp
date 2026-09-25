@@ -43,6 +43,24 @@ describe('ScheduleVideoBatchSchema', () => {
     expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, times: ['9am'] }).success).toBe(false);
     expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, times: [] }).success).toBe(false);
   });
+
+  it('rejects duplicate providers', () => {
+    const result = ScheduleVideoBatchSchema.safeParse({
+      ...validArgs,
+      providers: ['youtube', 'youtube'],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a non-IANA timezone', () => {
+    const result = ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: 'Not/AZone' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects more times than the batch limit', () => {
+    const times = Array.from({ length: 31 }, (_, i) => `0${i % 10}:00`);
+    expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, times }).success).toBe(false);
+  });
 });
 
 describe('PostEngineerClient.scheduleVideoBatch', () => {
@@ -147,6 +165,27 @@ describe('schedule_video_batch registration', () => {
       const { tools } = await client.listTools();
       const names = tools.map((t) => t.name);
       expect(names).toContain('schedule_video_batch');
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('rejects malformed times at the MCP boundary (proves the strict schema is registered)', async () => {
+    // Regression guard: the shape passed to server.tool must be the strict
+    // shared one — malformed args must fail before the handler runs.
+    const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+    const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
+    const server = createPostEngineerMcpServer();
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const result = await client.callTool({
+        name: 'schedule_video_batch',
+        arguments: { ...validArgs, times: ['6am'] },
+      });
+      expect(result.isError).toBe(true);
     } finally {
       await client.close();
       await server.close();
