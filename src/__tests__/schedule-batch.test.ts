@@ -121,6 +121,20 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     const client = new PostEngineerClient({ apiKey: 'key' });
     await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow('INSUFFICIENT_TOKENS');
   });
+
+  it('throws when a 200 response carries success: false', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: false, code: 'NOPE', error: 'backend said no' }),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/backend said no \(NOPE\)/);
+  });
 });
 
 describe('handleScheduleVideoBatch', () => {
@@ -181,7 +195,10 @@ describe('schedule_video_batch registration', () => {
 
   it('rejects malformed times at the MCP boundary (proves the strict schema is registered)', async () => {
     // Regression guard: the shape passed to server.tool must be the strict
-    // shared one — malformed args must fail before the handler runs.
+    // shared one — malformed args must fail at validation, before the
+    // handler runs (so fetch must never be called).
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
     const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
     const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
     const server = createPostEngineerMcpServer();
@@ -194,7 +211,9 @@ describe('schedule_video_batch registration', () => {
         arguments: { ...validArgs, times: ['6am'] },
       });
       expect(result.isError).toBe(true);
+      expect(fetchMock).not.toHaveBeenCalled();
     } finally {
+      vi.unstubAllGlobals();
       await client.close();
       await server.close();
     }

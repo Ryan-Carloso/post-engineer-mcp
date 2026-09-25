@@ -1,4 +1,6 @@
 import { validateScheduleAdvance } from './validator.js';
+import type { z } from 'zod';
+import type { ScheduleVideoBatchSchema } from './tools.js';
 
 export interface PostEngineerClientOptions {
   apiKey?: string;
@@ -50,13 +52,9 @@ export interface CreateScheduleInput {
   _nowForTesting?: Date;
 }
 
-export interface ScheduleVideoBatchInput {
-  personaId: string;
-  items: { topic: string }[];
-  providers: ('youtube' | 'instagram' | 'linkedin' | 'bluesky')[];
-  times: string[];
-  timezone: string;
-}
+// Single source of truth: derived from the strict zod schema in tools.ts
+// so the client payload can never drift from MCP-boundary validation.
+export type ScheduleVideoBatchInput = z.infer<typeof ScheduleVideoBatchSchema>;
 
 const PRODUCTION_API_URL = 'https://post-engineer.com';
 
@@ -369,6 +367,14 @@ export class PostEngineerClient {
       throw new Error(`Failed to schedule video batch: ${response.status} ${errorText}`);
     }
 
-    return response.json();
+    const body = (await response.json()) as { success?: unknown; error?: unknown; code?: unknown };
+    if (body !== null && typeof body === 'object' && body.success === false) {
+      const detail =
+        typeof body.error === 'string' && body.error.length > 0 ? body.error : 'batch rejected';
+      const code = typeof body.code === 'string' && body.code.length > 0 ? ` (${body.code})` : '';
+      throw new Error(`Failed to schedule video batch: ${detail}${code}`);
+    }
+
+    return body;
   }
 }
