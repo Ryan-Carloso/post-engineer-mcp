@@ -3,6 +3,15 @@ import type { z } from 'zod';
 import type { ScheduleVideoBatchResponse } from './schemas.js';
 import { ScheduleVideoBatchSchema, ScheduleVideoBatchResponseSchema } from './schemas.js';
 
+// Best-effort extraction of a scheduleId from an otherwise malformed 200
+// body: a backend that created the batch echoes its scheduleId, so a valid
+// one lets us report the outcome as confirmed instead of uncertain.
+function readScheduleId(body: unknown): string | null {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return null;
+  const scheduleId = (body as { scheduleId?: unknown }).scheduleId;
+  return typeof scheduleId === 'string' && scheduleId.length > 0 ? scheduleId : null;
+}
+
 export interface PostEngineerClientOptions {
   apiKey?: string;
 }
@@ -424,16 +433,20 @@ export class PostEngineerClient {
 
     const parsed = ScheduleVideoBatchResponseSchema.safeParse(body);
     if (!parsed.success) {
+      const issues = parsed.error.issues.map((issue) => issue.path.join('.') || '(root)').join(', ');
+      // A 200 response carrying a valid scheduleId means the backend created
+      // and charged the batch — report it as confirmed, not uncertain.
+      const createdId = readScheduleId(body);
       throw new Error(
-        `Failed to schedule video batch: response had an unexpected shape (${parsed.error.issues
-          .map((issue) => issue.path.join('.') || '(root)')
-          .join(', ')}); the batch may still have been created — check list_schedules before retrying`,
+        createdId !== null
+          ? `Failed to schedule video batch: response had an unexpected shape (${issues}); the batch was created (scheduleId: "${createdId}") — verify with list_schedules`
+          : `Failed to schedule video batch: response had an unexpected shape (${issues}); the batch may still have been created — check list_schedules before retrying`,
       );
     }
 
     if (parsed.data.slots.length !== validated.items.length) {
       throw new Error(
-        `Failed to schedule video batch: response had an unexpected shape (slots.length ${parsed.data.slots.length} !== items.length ${validated.items.length}); the batch may still have been created — check list_schedules before retrying`,
+        `Failed to schedule video batch: response had an unexpected shape (slots.length ${parsed.data.slots.length} !== items.length ${validated.items.length}); the batch was created (scheduleId: "${parsed.data.scheduleId}") — verify with list_schedules`,
       );
     }
 

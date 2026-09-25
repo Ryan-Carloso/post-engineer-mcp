@@ -110,6 +110,20 @@ describe('ScheduleVideoBatchSchema', () => {
     }
   });
 
+  it.each(['GMT+5', '+05:30'])(
+    'rejects the offset %s even when supportedValuesOf is missing',
+    (timezone) => {
+      const holder = Intl as unknown as { supportedValuesOf?: unknown };
+      const original = holder.supportedValuesOf;
+      holder.supportedValuesOf = undefined;
+      try {
+        expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone }).success).toBe(false);
+      } finally {
+        holder.supportedValuesOf = original;
+      }
+    },
+  );
+
   it('falls back to the constructor check when supportedValuesOf throws', () => {
     const holder = Intl as unknown as { supportedValuesOf?: unknown };
     const original = holder.supportedValuesOf;
@@ -490,6 +504,46 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     const message = (err as Error).message;
     expect(message.length).toBeLessThan(1000);
     expect(message).toMatch(/Failed to schedule video batch:/);
+  });
+
+  it('reports a malformed success body with a scheduleId as confirmed, not uncertain', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            scheduleId: 'sched-1',
+            tokensSpent: 4,
+            slots: 'nope',
+          }),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    const err = await client.scheduleVideoBatch(validArgs).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    const message = (err as Error).message;
+    expect(message).toMatch(/the batch was created.*scheduleId: "sched-1"/);
+    expect(message).not.toMatch(/may still have been created/);
+  });
+
+  it('keeps the uncertain hazard when the malformed body has no scheduleId', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ success: true, tokensSpent: 4, slots: [] }),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(
+      /may still have been created/,
+    );
   });
 
   it.each([0, 4.5])('rejects a 200 response with tokensSpent: %s as an unexpected shape', async (tokensSpent) => {
