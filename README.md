@@ -135,6 +135,7 @@ Never put the user's API key in the URL. Revoke the key in Post Engineer if it i
 - `get_video_status`: check generation status and get the final video URL.
 - `list_social_accounts`: list connected social accounts with the account IDs needed for scheduling.
 - `schedule_video`: schedule automated posting (must be at least 24h in advance; each provider needs an account ID from `list_social_accounts`).
+- `schedule_video_batch`: schedule a finite manual batch of 1-30 videos (one topic per video; tokens are charged upfront for the whole batch).
 - `list_schedules`: list automation schedules.
 - `list_posts`: list upcoming (scheduled) and past (published/failed) posts across all connected accounts.
 - `cancel_schedule`: cancel a schedule by its ID.

@@ -20,6 +20,7 @@ import {
   handleScheduleVideo,
   handleScheduleVideoBatch,
   scheduleVideoBatchParams,
+  MAX_BATCH_ITEMS,
 } from './tools.js';
 import { startHttpServer } from './http.js';
 
@@ -210,7 +211,7 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
 
   server.tool(
     'schedule_video_batch',
-    'Schedule a finite manual batch of videos (1-30). Each items entry becomes exactly one video with its own topic. Tokens are charged upfront for the whole batch (insufficient balance returns an INSUFFICIENT error and nothing is created); videos generate at the 06:00 UTC cutoff. The batch has exactly items.length slots: the next chronological occurrences of `times` in `timezone` (times repeat once exhausted).',
+    `Schedule a finite manual batch of videos (1-${MAX_BATCH_ITEMS}). Each items entry becomes exactly one video with its own topic. Tokens are charged upfront for the whole batch (insufficient balance returns an INSUFFICIENT error and nothing is created); videos generate at the 06:00 UTC cutoff. The batch has exactly items.length slots: the next chronological occurrences of \`times\` in \`timezone\` (times repeat once exhausted).`,
     scheduleVideoBatchParams,
     async (args) => {
       return handleScheduleVideoBatch(apiClient, args);

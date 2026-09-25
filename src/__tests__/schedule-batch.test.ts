@@ -135,6 +135,19 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     const client = new PostEngineerClient({ apiKey: 'key' });
     await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/backend said no \(NOPE\)/);
   });
+
+  it('falls back to a generic message when success: false has no error/code', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: false }),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/batch rejected/);
+  });
 });
 
 describe('handleScheduleVideoBatch', () => {
