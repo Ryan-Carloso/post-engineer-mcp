@@ -52,6 +52,14 @@ describe('ScheduleVideoBatchSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('rejects duplicate times', () => {
+    const result = ScheduleVideoBatchSchema.safeParse({
+      ...validArgs,
+      times: ['09:00', '09:00'],
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('rejects a non-IANA timezone', () => {
     const result = ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: 'Not/AZone' });
     expect(result.success).toBe(false);

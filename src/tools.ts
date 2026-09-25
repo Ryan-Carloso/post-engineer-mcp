@@ -105,7 +105,6 @@ export const scheduleVideoBatchParams = {
   providers: z
     .array(z.enum(['youtube', 'instagram', 'linkedin', 'bluesky']))
     .min(1, 'At least one provider required')
-    .max(4, 'At most one entry per provider')
     .refine((providers) => new Set(providers).size === providers.length, {
       message: 'providers must not contain duplicates',
     })
@@ -114,6 +113,9 @@ export const scheduleVideoBatchParams = {
     .array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'times must be "HH:MM"'))
     .min(1, 'At least one time required')
     .max(MAX_BATCH_ITEMS, `At most ${MAX_BATCH_ITEMS} times per batch`)
+    .refine((times) => new Set(times).size === times.length, {
+      message: 'times must not contain duplicates',
+    })
     .describe(
       'Daily "HH:MM" times; the batch has exactly items.length slots, ' +
         'which are the next chronological occurrences of these times ' +
