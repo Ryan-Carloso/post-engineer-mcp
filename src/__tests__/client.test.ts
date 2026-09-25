@@ -1045,6 +1045,20 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('reports the provider error before the scheduledAt window error, matching the schema order', async () => {
+    global.fetch = vi.fn();
+    const error = await client
+      .createSchedule({
+        personaId: 'persona-123',
+        providers: ['myspace'],
+        scheduledAt: '2020-01-01T00:00:00.000Z',
+      } as unknown as CreateScheduleInput)
+      .catch((e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toMatch(/unknown provider/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('rejects a wrong-typed scheduledAt with a type error, not a presence error', async () => {
     global.fetch = vi.fn();
     const error = await client

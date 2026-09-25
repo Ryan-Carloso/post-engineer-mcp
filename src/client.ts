@@ -3,7 +3,7 @@ import type { ProviderAccountIdsField, ScheduleProvider } from './shared.js';
 import {
   AUDIO_URL_EMPTY_MESSAGE,
   AUDIO_URL_INVALID_MESSAGE,
-  INPUT_OBJECT_MESSAGE,
+  assertInputObject,
   PERSONA_ID_REQUIRED_MESSAGE,
   PROVIDERS_REQUIRED_MESSAGE,
   PROVIDERS_TYPE_MESSAGE,
@@ -312,9 +312,7 @@ export class PostEngineerClient {
     // Untyped JS callers can pass null/undefined (or an array): property
     // access below would throw a raw TypeError, so guard the input itself
     // first.
-    if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-      throw new Error(INPUT_OBJECT_MESSAGE);
-    }
+    assertInputObject(input);
     // Fail fast for direct (non-MCP) callers, mirroring the MCP schema rules.
     // Single source of truth for the string fields: the type-guard loop and
     // the normalize step read the same object, so a future field can't be
@@ -414,12 +412,9 @@ export class PostEngineerClient {
   }
 
   async createSchedule(input: CreateScheduleInput): Promise<unknown> {
-    // Same null/undefined guard as generateVideoJob: fail with a clear
-    // message instead of a raw TypeError on the first property access.
-    // Arrays are rejected too (typeof [] === 'object').
-    if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-      throw new Error(INPUT_OBJECT_MESSAGE);
-    }
+    // Same guard as generateVideoJob: fail with a clear message instead of
+    // a raw TypeError on the first property access.
+    assertInputObject(input);
     // Mirror generateVideoJob's hardening: a blank or non-string personaId
     // fails fast here instead of server-side. Presence and type get
     // separate messages — a supplied-but-wrong-typed value is not
@@ -432,33 +427,12 @@ export class PostEngineerClient {
     }
     const personaId = input.personaId.trim();
 
-    // scheduledAt is required by the MCP schema (z.string(), no default):
-    // fail fast here instead of failing server-side with an opaque error.
-    // Normalized before validating: new Date() rejects padded ISO strings,
-    // so trim first and validate/send the trimmed value. Presence and type
-    // get separate messages — a supplied-but-wrong-typed value is not
-    // "missing".
-    const scheduledAt =
-      typeof input.scheduledAt === 'string' ? input.scheduledAt.trim() : input.scheduledAt;
-    if (scheduledAt === undefined || scheduledAt === '') {
-      throw new Error(SCHEDULED_AT_REQUIRED_MESSAGE);
-    }
-    // null is a supplied-but-wrong-typed value, not a missing one — it gets
-    // the type message, matching the schema's invalid_type_error.
-    if (typeof scheduledAt !== 'string' && !(scheduledAt instanceof Date)) {
-      throw new Error(SCHEDULED_AT_TYPE_MESSAGE);
-    }
-    const scheduledAtValidation = validateScheduleAdvance(scheduledAt, input._nowForTesting);
-    if (!scheduledAtValidation.isValid) {
-      throw new Error(scheduledAtValidation.error);
-    }
-
-    // Mirror the MCP schema's superRefine rules and fail fast instead of
-    // hitting the server (or throwing a TypeError). The per-provider
-    // account-ID rule itself lives in shared validateScheduleFields; the
-    // shape checks below are untyped-JS-caller hardening that zod handles
-    // on the MCP path. A non-array is a type error (same message as the
-    // schema's invalid_type_error), an empty array is "none given".
+    // Field checks follow the schema's field order (personaId, providers,
+    // account-IDs, scheduledAt, window, timezone) so both layers report the
+    // same first error for the same input. The shape checks below are
+    // untyped-JS-caller hardening that zod handles on the MCP path: a
+    // non-array is a type error (same message as the schema's
+    // invalid_type_error), an empty array is "none given".
     if (!Array.isArray(input.providers)) {
       throw new Error(PROVIDERS_TYPE_MESSAGE);
     }
@@ -500,15 +474,21 @@ export class PostEngineerClient {
       }
       accountIds[field] = trimmed;
     }
-    const missingAccountIds = validateScheduleFields({
-      providers,
-      accountIds: (field) => accountIds[field],
-    });
-    if (missingAccountIds.length > 0) {
-      // Report every missing provider at once, like the schema's superRefine,
-      // so callers don't fix one error at a time. Same formatting as the MCP
-      // transport (parseArgsOrError).
-      throw new Error(formatValidationIssues(missingAccountIds));
+    // scheduledAt is required by the MCP schema (z.string(), no default):
+    // fail fast here instead of failing server-side with an opaque error.
+    // Normalized before validating: new Date() rejects padded ISO strings,
+    // so trim first and validate/send the trimmed value. Presence and type
+    // get separate messages — a supplied-but-wrong-typed value is not
+    // "missing".
+    const scheduledAt =
+      typeof input.scheduledAt === 'string' ? input.scheduledAt.trim() : input.scheduledAt;
+    if (scheduledAt === undefined || scheduledAt === '') {
+      throw new Error(SCHEDULED_AT_REQUIRED_MESSAGE);
+    }
+    // null is a supplied-but-wrong-typed value, not a missing one — it gets
+    // the type message, matching the schema's invalid_type_error.
+    if (typeof scheduledAt !== 'string' && !(scheduledAt instanceof Date)) {
+      throw new Error(SCHEDULED_AT_TYPE_MESSAGE);
     }
     // Fail-fast guards for the optional schedule-window fields, mirroring
     // the ScheduleVideoObject zod bounds: untyped JS callers get a clear
@@ -549,6 +529,25 @@ export class PostEngineerClient {
     const timezone = input.timezone?.trim();
     if (timezone === '') {
       throw new Error(TIMEZONE_EMPTY_MESSAGE);
+    }
+
+    const missingAccountIds = validateScheduleFields({
+      providers,
+      accountIds: (field) => accountIds[field],
+    });
+    if (missingAccountIds.length > 0) {
+      // Report every missing provider at once, like the schema's superRefine,
+      // so callers don't fix one error at a time. Same formatting as the MCP
+      // transport (parseArgsOrError).
+      throw new Error(formatValidationIssues(missingAccountIds));
+    }
+    // Advance-window check runs after the field and cross-field rules,
+    // matching the MCP path where the schema validates first and the
+    // handler's client call checks the window — so both layers report
+    // the same first error for the same input.
+    const scheduledAtValidation = validateScheduleAdvance(scheduledAt, input._nowForTesting);
+    if (!scheduledAtValidation.isValid) {
+      throw new Error(scheduledAtValidation.error);
     }
 
     const url = `${this.baseUrl}/api/schedule`;

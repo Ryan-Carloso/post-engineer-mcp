@@ -68,6 +68,18 @@ export function stringFieldMessage(field: string): string {
 /** Guard for direct-client methods called with null/undefined by untyped JS callers. */
 export const INPUT_OBJECT_MESSAGE = 'input must be an object';
 
+/**
+ * Fail-fast input-object guard for the direct client methods: untyped JS
+ * callers can pass null/undefined (or an array — `typeof [] === 'object'`),
+ * and property access below would throw a raw TypeError. Shared so both
+ * methods reject non-objects with the same message.
+ */
+export function assertInputObject(input: unknown): asserts input is object {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    throw new Error(INPUT_OBJECT_MESSAGE);
+  }
+}
+
 /** Wrong-typed scheduledAt from direct (untyped) callers — the client accepts Date, the schema does not. */
 export const SCHEDULED_AT_TYPE_MESSAGE = 'scheduledAt must be an ISO date string or Date';
 
