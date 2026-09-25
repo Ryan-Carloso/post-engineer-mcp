@@ -368,7 +368,7 @@ export class PostEngineerClient {
       headers: this.getHeaders(),
       body: JSON.stringify({
         personaId,
-        video_script_prompt: input.scriptPrompt,
+        video_script_prompt: trimOptionalString(input.scriptPrompt),
         audio_url: audioUrl,
         // Guarded above: voiceId is only present for faceless generation.
         voice_id: voiceId,
@@ -409,15 +409,19 @@ export class PostEngineerClient {
 
     // scheduledAt is required by the MCP schema (z.string(), no default):
     // fail fast here instead of failing server-side with an opaque error.
+    // Normalized before validating: new Date() rejects padded ISO strings,
+    // so trim first and validate/send the trimmed value.
+    const scheduledAt =
+      typeof input.scheduledAt === 'string' ? input.scheduledAt.trim() : input.scheduledAt;
     if (
-      input.scheduledAt === undefined ||
-      input.scheduledAt === null ||
-      (typeof input.scheduledAt !== 'string' && !(input.scheduledAt instanceof Date)) ||
-      (typeof input.scheduledAt === 'string' && input.scheduledAt.trim() === '')
+      scheduledAt === undefined ||
+      scheduledAt === null ||
+      scheduledAt === '' ||
+      (typeof scheduledAt !== 'string' && !(scheduledAt instanceof Date))
     ) {
       throw new Error('scheduledAt is required (ISO date time, between 24h and 30 days in the future)');
     }
-    const scheduledAtValidation = validateScheduleAdvance(input.scheduledAt, input._nowForTesting);
+    const scheduledAtValidation = validateScheduleAdvance(scheduledAt, input._nowForTesting);
     if (!scheduledAtValidation.isValid) {
       throw new Error(scheduledAtValidation.error);
     }
@@ -489,7 +493,7 @@ export class PostEngineerClient {
         // untyped callers never reach the request body.
         providers: [...new Set(providers)],
         ...accountIds,
-        scheduledAt: input.scheduledAt,
+        scheduledAt,
         daysOfWeek: input.daysOfWeek,
         startHour: input.startHour,
         endHour: input.endHour,

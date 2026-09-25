@@ -822,6 +822,48 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('trims a padded scriptPrompt in the video job payload', async () => {
+    const mockJob = { success: true, taskId: 'task-script-1' };
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockJob,
+    });
+
+    await client.generateVideoJob({
+      personaId: 'persona-123',
+      scriptPrompt: '  Top 3 AI tools  ',
+    });
+
+    const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
+    const payload = JSON.parse(fetchBody.body);
+    expect(payload.video_script_prompt).toBe('Top 3 AI tools');
+  });
+
+  it('trims a padded scheduledAt in the schedule payload', async () => {
+    const mockSchedule = { success: true, scheduleId: 'sched-trim-1' };
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockSchedule,
+    });
+
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
+
+    await client.createSchedule({
+      personaId: 'persona-123',
+      providers: ['youtube'],
+      youtubeAccountIds: ['yt-1'],
+      scheduledAt: `  ${validTime}  `,
+      _nowForTesting: now,
+    });
+
+    const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
+    const payload = JSON.parse(fetchBody.body);
+    expect(payload.scheduledAt).toBe(validTime);
+  });
+
   it('calls schedule API when scheduledAt is >= 24h away', async () => {
     const mockSchedule = { success: true, scheduleId: 'sched-123' };
     global.fetch = vi.fn().mockResolvedValue({
