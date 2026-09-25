@@ -9,7 +9,7 @@ import { ScheduleVideoBatchSchema, ScheduleVideoBatchResponseSchema } from './sc
 function readScheduleId(body: unknown): string | null {
   if (body === null || typeof body !== 'object' || Array.isArray(body)) return null;
   const scheduleId = (body as { scheduleId?: unknown }).scheduleId;
-  return typeof scheduleId === 'string' && scheduleId.length > 0 ? scheduleId : null;
+  return typeof scheduleId === 'string' && scheduleId.length > 0 ? scheduleId.slice(0, 100) : null;
 }
 
 export interface PostEngineerClientOptions {
@@ -368,7 +368,15 @@ export class PostEngineerClient {
     // Defense-in-depth: the MCP boundary validates first, but direct library
     // consumers bypass it. This also enforces the trim/transform invariants
     // (topic trimming, canonical timezone) the slots.length check relies on.
-    const validated = ScheduleVideoBatchSchema.parse(input);
+    const inputParse = ScheduleVideoBatchSchema.safeParse(input);
+    if (!inputParse.success) {
+      throw new Error(
+        `Failed to schedule video batch: invalid input (${inputParse.error.issues
+          .map((issue) => issue.path.join('.') || '(root)')
+          .join(', ')})`,
+      );
+    }
+    const validated = inputParse.data;
     const url = `${this.baseUrl}/api/schedule/batch`;
     let response: Response;
     try {

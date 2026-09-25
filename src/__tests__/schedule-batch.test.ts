@@ -464,10 +464,12 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const client = new PostEngineerClient({ apiKey: 'key' });
-    await expect(client.scheduleVideoBatch({ ...validArgs, items: [] })).rejects.toThrow();
-    await expect(
-      client.scheduleVideoBatch({ ...validArgs, timezone: 'GMT+5' }),
-    ).rejects.toThrow();
+    await expect(client.scheduleVideoBatch({ ...validArgs, items: [] })).rejects.toThrow(
+      /Failed to schedule video batch: invalid input \(items\)/,
+    );
+    await expect(client.scheduleVideoBatch({ ...validArgs, timezone: 'GMT+5' })).rejects.toThrow(
+      /Failed to schedule video batch: invalid input \(timezone\)/,
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

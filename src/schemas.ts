@@ -118,7 +118,8 @@ export const scheduleVideoBatchParams = {
     })
     .refine(isIanaTimezone, 'timezone must be a valid IANA timezone')
     .describe(
-      'IANA timezone for the times, e.g. "Europe/Lisbon" (aliases and any casing are resolved to the canonical ID)',
+      'Canonical IANA timezone for the times, e.g. "Europe/Lisbon" (any casing is normalized; aliases like "EST" and offsets like "GMT+5" are rejected). ' +
+        'Note: Etc/GMT±H zones use the POSIX-inverted sign, so "Etc/GMT+5" is UTC-5, not UTC+5.',
     ),
 };
 
