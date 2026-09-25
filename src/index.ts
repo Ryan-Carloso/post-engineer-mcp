@@ -19,9 +19,8 @@ import {
   handleGetVideoStatus,
   handleScheduleVideo,
   handleScheduleVideoBatch,
-  scheduleVideoBatchParams,
-  MAX_BATCH_ITEMS,
 } from './tools.js';
+import { MAX_BATCH_ITEMS, scheduleVideoBatchParams } from './schemas.js';
 import { startHttpServer } from './http.js';
 
 export function createPostEngineerMcpServer(client?: PostEngineerClient): McpServer {

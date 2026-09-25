@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ScheduleVideoBatchSchema, scheduleVideoBatchParams, handleScheduleVideoBatch } from '../tools.js';
+import { handleScheduleVideoBatch } from '../tools.js';
+import { ScheduleVideoBatchSchema, scheduleVideoBatchParams } from '../schemas.js';
 import { PostEngineerClient } from '../client.js';
 import { createPostEngineerMcpServer } from '../index.js';
 
@@ -66,8 +67,21 @@ describe('ScheduleVideoBatchSchema', () => {
   });
 
   it('rejects more times than the batch limit', () => {
-    const times = Array.from({ length: 31 }, (_, i) => `0${i % 10}:00`);
+    // 31 distinct valid times, so only the max rule (not uniqueness) can reject.
+    const times = Array.from({ length: 31 }, (_, i) => {
+      const hour = String(Math.floor(i / 2)).padStart(2, '0');
+      return `${hour}:${i % 2 === 0 ? '00' : '30'}`;
+    });
     expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, times }).success).toBe(false);
+  });
+
+  it('accepts the UTC IANA zone', () => {
+    expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: 'UTC' }).success).toBe(true);
+  });
+
+  it('rejects UTC-offset strings as timezones', () => {
+    const result = ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: '+05:30' });
+    expect(result.success).toBe(false);
   });
 });
 

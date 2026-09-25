@@ -1,6 +1,6 @@
 import { validateScheduleAdvance } from './validator.js';
 import type { z } from 'zod';
-import type { ScheduleVideoBatchSchema } from './tools.js';
+import type { ScheduleVideoBatchSchema } from './schemas.js';
 
 export interface PostEngineerClientOptions {
   apiKey?: string;
