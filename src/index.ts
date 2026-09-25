@@ -96,7 +96,7 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
 
   server.tool(
     'list_social_accounts',
-    'List connected social accounts (YouTube, Instagram, LinkedIn) with the account IDs needed for schedule_video.',
+    'List connected social accounts (YouTube, Instagram, LinkedIn, Bluesky) with the account IDs needed for schedule_video.',
     {},
     async () => {
       return handleListSocialAccounts(apiClient);
@@ -158,11 +158,12 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
 
   server.tool(
     'generate_video_from_persona',
-    'Trigger video generation using an existing persona. Optional scriptPrompt overrides the video script; optional audioUrl (public http(s) URL) supplies custom audio for this video, overriding the persona voice.',
+    'Trigger video generation using an existing persona, or faceless (omit personaId). Faceless: optional scriptPrompt plus audioUrl (public http(s) URL) or voiceId (see list_voices) supplies the voice. With a persona: optional scriptPrompt overrides the video script; optional audioUrl supplies custom audio, overriding the persona voice.',
     {
-      personaId: z.string().min(1, 'personaId is required').describe('The ID of the persona to generate video with'),
+      personaId: z.string().min(1, 'personaId is required').optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
       scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
       audioUrl: z.string().url('audioUrl must be a valid URL').optional().describe('Optional public URL of custom audio for this video (overrides the persona voice)'),
+      voiceId: z.string().min(1).optional().describe('Optional voice ID for this video (see list_voices); used for faceless generation when audioUrl is not supplied'),
     },
     async (args) => {
       return handleGenerateVideo(apiClient, args);
@@ -186,12 +187,13 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
     {
       personaId: z.string().min(1, 'personaId is required').describe('The ID of the persona'),
       providers: z
-        .array(z.enum(['youtube', 'instagram', 'linkedin']))
+        .array(z.enum(['youtube', 'instagram', 'linkedin', 'bluesky']))
         .min(1, 'At least one provider required')
         .describe('Target social platforms'),
       youtubeAccountIds: z.array(z.string()).optional().default([]),
       instagramAccountIds: z.array(z.string()).optional().default([]),
       linkedinAccountIds: z.array(z.string()).optional().default([]),
+      blueskyAccountIds: z.array(z.string()).optional().default([]),
       scheduledAt: z
         .string()
         .describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),

@@ -18,9 +18,10 @@ export interface CreatePersonaInput {
 }
 
 export interface GenerateVideoJobInput {
-  personaId: string;
+  personaId?: string;
   scriptPrompt?: string;
   audioUrl?: string;
+  voiceId?: string;
 }
 
 export interface UpdatePersonaInput {
@@ -37,10 +38,11 @@ export interface UpdatePersonaInput {
 
 export interface CreateScheduleInput {
   personaId: string;
-  providers: ('youtube' | 'instagram' | 'linkedin')[];
+  providers: ('youtube' | 'instagram' | 'linkedin' | 'bluesky')[];
   youtubeAccountIds?: string[];
   instagramAccountIds?: string[];
   linkedinAccountIds?: string[];
+  blueskyAccountIds?: string[];
   scheduledAt?: string | Date;
   daysOfWeek?: number[];
   startHour?: number;
@@ -287,6 +289,7 @@ export class PostEngineerClient {
         personaId: input.personaId,
         video_script_prompt: input.scriptPrompt,
         audio_url: input.audioUrl,
+        voice_id: input.voiceId,
       }),
     });
 
@@ -331,6 +334,7 @@ export class PostEngineerClient {
         youtubeAccountIds: input.youtubeAccountIds ?? [],
         instagramAccountIds: input.instagramAccountIds ?? [],
         linkedinAccountIds: input.linkedinAccountIds ?? [],
+        blueskyAccountIds: input.blueskyAccountIds ?? [],
         scheduledAt: input.scheduledAt,
         daysOfWeek: input.daysOfWeek,
         startHour: input.startHour,

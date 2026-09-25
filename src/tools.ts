@@ -56,9 +56,10 @@ export const CancelScheduleSchema = z.object({
 export const GetTokenBalanceSchema = z.object({});
 
 export const GenerateVideoSchema = z.object({
-  personaId: z.string().min(1, 'personaId is required'),
+  personaId: z.string().min(1, 'personaId is required').optional().describe('The ID of the persona to generate video with. Omit for faceless generation (then audioUrl or voiceId is required).'),
   scriptPrompt: z.string().optional(),
   audioUrl: z.string().url('audioUrl must be a valid URL').optional().describe('Public URL of custom audio for this video (overrides the persona voice)'),
+  voiceId: z.string().min(1).optional().describe('Voice ID for this video (see list_voices). Used for faceless generation when audioUrl is not supplied.'),
 });
 
 export const GetVideoStatusSchema = z.object({
@@ -67,10 +68,11 @@ export const GetVideoStatusSchema = z.object({
 
 export const ScheduleVideoSchema = z.object({
   personaId: z.string().min(1, 'personaId is required'),
-  providers: z.array(z.enum(['youtube', 'instagram', 'linkedin'])).min(1, 'At least one provider required'),
+  providers: z.array(z.enum(['youtube', 'instagram', 'linkedin', 'bluesky'])).min(1, 'At least one provider required'),
   youtubeAccountIds: z.array(z.string()).optional().default([]),
   instagramAccountIds: z.array(z.string()).optional().default([]),
   linkedinAccountIds: z.array(z.string()).optional().default([]),
+  blueskyAccountIds: z.array(z.string()).optional().default([]),
   scheduledAt: z.string().describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
   daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
   startHour: z.number().int().min(0).max(23).optional(),

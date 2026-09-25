@@ -13,6 +13,8 @@ import {
   handleScheduleVideo,
   handleConnectAccount,
   ListPostsSchema,
+  GenerateVideoSchema,
+  ScheduleVideoSchema,
 } from '../tools.js';
 import type { PostEngineerClient } from '../client.js';
 
@@ -90,6 +92,68 @@ describe('MCP Tool Handlers', () => {
       audioUrl: 'https://cdn.example.com/narracao.mp3',
     });
     expect(response.content[0].text).toContain('task-audio-2');
+  });
+
+  it('handleGenerateVideo passes faceless args (no personaId) through to the client', async () => {
+    vi.mocked(mockClient.generateVideoJob).mockResolvedValue({
+      success: true,
+      taskId: 'task-faceless-1',
+    });
+
+    const response = await handleGenerateVideo(mockClient, {
+      audioUrl: 'https://cdn.example.com/narracao.mp3',
+    });
+
+    expect(mockClient.generateVideoJob).toHaveBeenCalledWith({
+      audioUrl: 'https://cdn.example.com/narracao.mp3',
+    });
+    expect(response.content[0].text).toContain('task-faceless-1');
+  });
+
+  describe('GenerateVideoSchema', () => {
+    it('parses without personaId for faceless generation', () => {
+      const parsed = GenerateVideoSchema.parse({
+        audioUrl: 'https://cdn.example.com/narracao.mp3',
+      });
+      expect(parsed.personaId).toBeUndefined();
+    });
+
+    it('rejects an empty-string personaId', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({ personaId: '', audioUrl: 'https://cdn.example.com/a.mp3' })
+      ).toThrow();
+    });
+
+    it('accepts an optional voiceId', () => {
+      const parsed = GenerateVideoSchema.parse({
+        voiceId: 'voice-calm-1',
+        audioUrl: 'https://cdn.example.com/narracao.mp3',
+      });
+      expect(parsed.voiceId).toBe('voice-calm-1');
+    });
+  });
+
+  describe('ScheduleVideoSchema', () => {
+    it("accepts 'bluesky' as a provider", () => {
+      const parsed = ScheduleVideoSchema.parse({
+        personaId: 'persona-123',
+        providers: ['bluesky'],
+        blueskyAccountIds: ['bsky-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      });
+      expect(parsed.providers).toEqual(['bluesky']);
+      expect(parsed.blueskyAccountIds).toEqual(['bsky-1']);
+    });
+
+    it('defaults blueskyAccountIds to an empty array', () => {
+      const parsed = ScheduleVideoSchema.parse({
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      });
+      expect(parsed.blueskyAccountIds).toEqual([]);
+    });
   });
 
   it('handleListVoices returns the voice catalog', async () => {

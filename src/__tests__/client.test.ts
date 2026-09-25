@@ -399,6 +399,61 @@ describe('PostEngineerClient', () => {
     expect(result).toEqual(mockJob);
   });
 
+  it('sends a faceless video job without personaId', async () => {
+    const mockJob = {
+      success: true,
+      taskId: 'task-faceless-9',
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockJob,
+    });
+
+    const result = await client.generateVideoJob({
+      voiceId: 'voice-calm-1',
+      audioUrl: 'https://cdn.example.com/narracao.mp3',
+    });
+
+    const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
+    const payload = JSON.parse(fetchBody.body);
+    expect(payload).not.toHaveProperty('personaId');
+    expect(payload.voice_id).toBe('voice-calm-1');
+    expect(payload.audio_url).toBe('https://cdn.example.com/narracao.mp3');
+    expect(result).toEqual(mockJob);
+  });
+
+  it('sends voice_id in the video job payload when a persona is used', async () => {
+    const mockJob = {
+      success: true,
+      taskId: 'task-voice-3',
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockJob,
+    });
+
+    const result = await client.generateVideoJob({
+      personaId: 'persona-123',
+      voiceId: 'voice-calm-1',
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${baseUrl}/api/persona/video-job`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          personaId: 'persona-123',
+          voice_id: 'voice-calm-1',
+        }),
+      })
+    );
+    expect(result).toEqual(mockJob);
+  });
+
   it('retrieves video task status', async () => {
     const mockStatus = {
       success: true,
@@ -465,6 +520,32 @@ describe('PostEngineerClient', () => {
         method: 'POST',
       })
     );
+    expect(result).toEqual(mockSchedule);
+  });
+
+  it('sends blueskyAccountIds in the schedule payload', async () => {
+    const mockSchedule = { success: true, scheduleId: 'sched-bsky-1' };
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockSchedule,
+    });
+
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
+
+    const result = await client.createSchedule({
+      personaId: 'persona-123',
+      providers: ['bluesky'],
+      blueskyAccountIds: ['bsky-1'],
+      scheduledAt: validTime,
+      _nowForTesting: now,
+    });
+
+    const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
+    const payload = JSON.parse(fetchBody.body);
+    expect(payload.providers).toEqual(['bluesky']);
+    expect(payload.blueskyAccountIds).toEqual(['bsky-1']);
     expect(result).toEqual(mockSchedule);
   });
 
