@@ -79,7 +79,7 @@ describe('ScheduleVideoBatchSchema', () => {
     expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: 'UTC' }).success).toBe(true);
   });
 
-  it.each(['+05:30', '+0530', '-08:00'])('rejects UTC-offset string %s as timezone', (timezone) => {
+  it.each(['+05:30', '+0530', '-08:00', '+05', '-08'])('rejects UTC-offset string %s as timezone', (timezone) => {
     const result = ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone });
     expect(result.success).toBe(false);
   });
@@ -161,6 +161,19 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
 
     const client = new PostEngineerClient({ apiKey: 'key' });
     await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/batch rejected/);
+  });
+
+  it('uses the code when success: false has a code but no error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: false, code: 'WEIRD' }),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/batch rejected \(WEIRD\)/);
   });
 });
 

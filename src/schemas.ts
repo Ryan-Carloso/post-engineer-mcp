@@ -7,10 +7,10 @@ import { z } from 'zod';
 export const MAX_BATCH_ITEMS = 30;
 
 // IANA timezone check via the Intl constructor (throws on unknown zones).
-// The constructor also accepts UTC-offset strings like "+05:30", which are
-// not IANA zone IDs, so those are rejected explicitly.
+// The constructor also accepts UTC-offset strings like "+05:30" or "+05",
+// which are not IANA zone IDs, so those are rejected explicitly.
 const isIanaTimezone = (tz: string): boolean => {
-  if (/^[+-]\d{2}:?\d{2}$/.test(tz)) return false;
+  if (/^[+-]\d{1,2}(:?\d{2})?$/.test(tz)) return false;
   try {
     new Intl.DateTimeFormat('en', { timeZone: tz });
     return true;
