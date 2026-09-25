@@ -371,13 +371,14 @@ export class PostEngineerClient {
     }
 
     if (!response.ok) {
-      // 4xx means the backend definitively rejected the batch (nothing was
-      // created or charged); only 5xx leaves the outcome uncertain.
+      // 4xx (except 408) means the backend definitively rejected the batch
+      // (nothing was created or charged). 5xx and 408 leave the outcome
+      // uncertain: the server may have charged and created the batch.
       const errorText = (await response.text()).slice(0, 500);
-      const hazard =
-        response.status >= 500
-          ? '; the batch may still have been created — check list_schedules before retrying'
-          : '';
+      const uncertain = response.status >= 500 || response.status === 408;
+      const hazard = uncertain
+        ? '; the batch may still have been created — check list_schedules before retrying'
+        : '';
       throw new Error(`Failed to schedule video batch: ${response.status} ${errorText}${hazard}`);
     }
 

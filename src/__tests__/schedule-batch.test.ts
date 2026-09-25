@@ -110,6 +110,20 @@ describe('ScheduleVideoBatchSchema', () => {
     },
   );
 
+  it('parses the timezone to its canonical ID', () => {
+    const parsed = ScheduleVideoBatchSchema.parse({ ...validArgs, timezone: 'america/new_york' });
+    expect(parsed.timezone).toBe('America/New_York');
+  });
+
+  it('keeps invalid timezones failing after the transform', () => {
+    expect(
+      ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: 'Not/AZone' }).success,
+    ).toBe(false);
+    expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: '+05:30' }).success).toBe(
+      false,
+    );
+  });
+
   it.each(['+05:30', '+0530', '-08:00', '+05', '-08', 'GMT+5'])('rejects UTC-offset string %s as timezone', (timezone) => {
     const result = ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone });
     expect(result.success).toBe(false);
@@ -303,6 +317,22 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({ ok: false, status: 500, text: () => Promise.resolve('boom') }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(
+      /check list_schedules before retrying/,
+    );
+  });
+
+  it('includes the retry hazard on a 408 timeout', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 408,
+        text: () => Promise.resolve('request timeout'),
+      }),
     );
 
     const client = new PostEngineerClient({ apiKey: 'key' });

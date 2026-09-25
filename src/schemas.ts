@@ -71,8 +71,20 @@ export const scheduleVideoBatchParams = {
   timezone: z
     .string()
     .min(1, 'timezone is required')
+    .transform((tz) => {
+      // Resolve aliases/links and any casing to the canonical IANA ID so the
+      // backend always receives the canonical value. Invalid zones fall
+      // through unchanged; the refine below rejects them.
+      try {
+        return new Intl.DateTimeFormat('en', { timeZone: tz }).resolvedOptions().timeZone;
+      } catch {
+        return tz;
+      }
+    })
     .refine(isIanaTimezone, 'timezone must be a valid IANA timezone')
-    .describe('Canonical IANA timezone for the times, e.g. "Europe/Lisbon" (aliases and any casing are resolved to their canonical ID)'),
+    .describe(
+      'IANA timezone for the times, e.g. "Europe/Lisbon" (aliases and any casing are resolved to the canonical ID)',
+    ),
 };
 
 export const ScheduleVideoBatchSchema = z.object(scheduleVideoBatchParams);
