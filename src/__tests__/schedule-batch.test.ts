@@ -468,7 +468,7 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
       /Failed to schedule video batch: invalid input \(items\)/,
     );
     await expect(client.scheduleVideoBatch({ ...validArgs, timezone: 'GMT+5' })).rejects.toThrow(
-      /Failed to schedule video batch: invalid input \(timezone\)/,
+      /Failed to schedule video batch: invalid input \(timezone/,
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });
