@@ -568,6 +568,21 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('reports the invalid audioUrl before cross-field issues, like the schema', async () => {
+    // The schema's field-level refine runs during object parsing, before
+    // superRefine; the client mirrors that order so both paths report the
+    // same messages in the same order.
+    global.fetch = vi.fn();
+    await expect(
+      client.generateVideoJob({
+        audioUrl: 'not-a-url',
+        voiceId: 'elevenlabs-voice',
+        videoSubject: 'Morning motivation',
+      })
+    ).rejects.toThrow(/^audioUrl must be an http\(s\) URL$/);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('rejects a blank personaId instead of treating it as faceless', async () => {
     global.fetch = vi.fn();
     await expect(
@@ -742,6 +757,69 @@ describe('PostEngineerClient', () => {
     const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
     const payload = JSON.parse(fetchBody.body);
     expect(payload.providers).toEqual(['youtube']);
+  });
+
+  it('rejects invalid schedule-window fields without calling API', async () => {
+    global.fetch = vi.fn();
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
+    const base = {
+      personaId: 'persona-123',
+      providers: ['youtube'],
+      youtubeAccountIds: ['yt-1'],
+      scheduledAt: validTime,
+      _nowForTesting: now,
+    };
+    const cases: Array<[Record<string, unknown>, RegExp]> = [
+      [{ daysOfWeek: 'mon' }, /daysOfWeek must be an array of integers between 0 and 6/i],
+      [{ daysOfWeek: [7] }, /daysOfWeek must be an array of integers between 0 and 6/i],
+      [{ daysOfWeek: [1.5] }, /daysOfWeek must be an array of integers between 0 and 6/i],
+      [{ startHour: 24 }, /startHour must be an integer between 0 and 23/i],
+      [{ startHour: -1 }, /startHour must be an integer between 0 and 23/i],
+      [{ endHour: 9.5 }, /endHour must be an integer between 0 and 23/i],
+      [{ postsPerDay: 0 }, /postsPerDay must be an integer between 1 and 10/i],
+      [{ postsPerDay: 11 }, /postsPerDay must be an integer between 1 and 10/i],
+      [{ timezone: 42 }, /timezone must be a string/i],
+    ];
+    for (const [override, message] of cases) {
+      await expect(
+        client.createSchedule({ ...base, ...override } as unknown as CreateScheduleInput)
+      ).rejects.toThrow(message);
+    }
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('forwards valid schedule-window fields in the payload', async () => {
+    const mockSchedule = { success: true, scheduleId: 'sched-window-1' };
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockSchedule,
+    });
+
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
+
+    await client.createSchedule({
+      personaId: 'persona-123',
+      providers: ['youtube'],
+      youtubeAccountIds: ['yt-1'],
+      scheduledAt: validTime,
+      daysOfWeek: [1, 3, 5],
+      startHour: 9,
+      endHour: 17,
+      postsPerDay: 3,
+      timezone: 'America/Sao_Paulo',
+      _nowForTesting: now,
+    });
+
+    const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
+    const payload = JSON.parse(fetchBody.body);
+    expect(payload.daysOfWeek).toEqual([1, 3, 5]);
+    expect(payload.startHour).toBe(9);
+    expect(payload.endHour).toBe(17);
+    expect(payload.postsPerDay).toBe(3);
+    expect(payload.timezone).toBe('America/Sao_Paulo');
   });
 
   it('rejects when providers is omitted without calling API', async () => {

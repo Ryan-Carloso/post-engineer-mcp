@@ -159,6 +159,24 @@ export function unknownProviderMessage(provider: unknown): string {
   return `Unknown provider ${JSON.stringify(provider)}. Must be one of: ${SCHEDULE_PROVIDER_NAMES.join(', ')}`;
 }
 
+/**
+ * Fail-fast message for the optional schedule-window fields, mirroring the
+ * ScheduleVideoObject zod bounds (daysOfWeek: int 0-6, startHour/endHour:
+ * int 0-23, postsPerDay: int 1-10).
+ */
+export function scheduleWindowMessage(
+  field: 'daysOfWeek' | 'startHour' | 'endHour' | 'postsPerDay'
+): string {
+  switch (field) {
+    case 'daysOfWeek':
+      return 'daysOfWeek must be an array of integers between 0 and 6';
+    case 'postsPerDay':
+      return 'postsPerDay must be an integer between 1 and 10';
+    default:
+      return `${field} must be an integer between 0 and 23`;
+  }
+}
+
 /** Trimmed video-generation fields for cross-field validation. */
 export interface GenerateVideoFields {
   personaId?: string;

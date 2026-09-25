@@ -16,6 +16,7 @@ import {
   isScheduleProvider,
   isValidHttpUrl,
   providerAccountIdsField,
+  scheduleWindowMessage,
   stringFieldMessage,
   unknownProviderMessage,
   validateGenerateVideoFields,
@@ -328,13 +329,16 @@ export class PostEngineerClient {
     }
     // Normalize once, then validate the normalized values. Blank stays ''
     // here (not coerced to undefined) so the checks below can distinguish
-    // "provided but blank" from "omitted".
-    const trim = (value: string | undefined): string | undefined => value?.trim();
-    const personaId = trim(rawFields.personaId);
-    const scriptPrompt = trim(rawFields.scriptPrompt);
-    const audioUrl = trim(rawFields.audioUrl);
-    const voiceId = trim(rawFields.voiceId);
-    const videoSubject = trim(rawFields.videoSubject);
+    // "provided but blank" from "omitted". Named trimKeepBlank (not trim) to
+    // keep it distinct from the shared trimOptionalString, which maps blank
+    // to undefined — unifying them would silently break the
+    // provided-but-blank detection below.
+    const trimKeepBlank = (value: string | undefined): string | undefined => value?.trim();
+    const personaId = trimKeepBlank(rawFields.personaId);
+    const scriptPrompt = trimKeepBlank(rawFields.scriptPrompt);
+    const audioUrl = trimKeepBlank(rawFields.audioUrl);
+    const voiceId = trimKeepBlank(rawFields.voiceId);
+    const videoSubject = trimKeepBlank(rawFields.videoSubject);
     // Field-level blank checks, mirroring the schema's min(1) field rules: a
     // blank personaId must be rejected, not normalized to undefined —
     // normalizing would silently flip the call to faceless mode.
@@ -347,15 +351,19 @@ export class PostEngineerClient {
     if (audioUrl === '') {
       throw new Error(AUDIO_URL_EMPTY_MESSAGE);
     }
+    // Field-level URL check runs before the cross-field rules, mirroring the
+    // schema: its refine runs during object parsing, before superRefine. An
+    // input violating both reports the same messages in the same order on
+    // both paths.
+    if (audioUrl && !isValidHttpUrl(audioUrl)) {
+      throw new Error(AUDIO_URL_INVALID_MESSAGE);
+    }
     // Cross-field rules are shared with the MCP schema
     // (validateGenerateVideoFields) so the layers can't diverge; every
     // applicable issue is reported at once, like the schema's superRefine.
     const issues = validateGenerateVideoFields({ personaId, audioUrl, voiceId, videoSubject });
     if (issues.length > 0) {
       throw new Error(issues.map((issue) => issue.message).join('; '));
-    }
-    if (audioUrl && !isValidHttpUrl(audioUrl)) {
-      throw new Error(AUDIO_URL_INVALID_MESSAGE);
     }
     const url = `${this.baseUrl}/api/persona/video-job`;
     const response = await fetch(url, {
@@ -475,6 +483,32 @@ export class PostEngineerClient {
       // so callers don't fix one error at a time.
       throw new Error(missingAccountIds.map((issue) => issue.message).join('; '));
     }
+    // Fail-fast guards for the optional schedule-window fields, mirroring
+    // the ScheduleVideoObject zod bounds: untyped JS callers get a clear
+    // error here instead of an opaque server-side rejection.
+    if (input.daysOfWeek !== undefined) {
+      const validDays =
+        Array.isArray(input.daysOfWeek) &&
+        input.daysOfWeek.every((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+      if (!validDays) {
+        throw new Error(scheduleWindowMessage('daysOfWeek'));
+      }
+    }
+    for (const field of ['startHour', 'endHour'] as const) {
+      const value = input[field];
+      if (value !== undefined && (!Number.isInteger(value) || value < 0 || value > 23)) {
+        throw new Error(scheduleWindowMessage(field));
+      }
+    }
+    if (
+      input.postsPerDay !== undefined &&
+      (!Number.isInteger(input.postsPerDay) || input.postsPerDay < 1 || input.postsPerDay > 10)
+    ) {
+      throw new Error(scheduleWindowMessage('postsPerDay'));
+    }
+    if (input.timezone !== undefined && typeof input.timezone !== 'string') {
+      throw new Error(stringFieldMessage('timezone'));
+    }
 
     const url = `${this.baseUrl}/api/schedule`;
     // Account-ID fields are derived from the shared provider list via the
@@ -491,8 +525,8 @@ export class PostEngineerClient {
       headers: this.getHeaders(),
       body: JSON.stringify({
         personaId,
-        // Deduplicated: the MCP path's zod shape doesn't dedupe either, but
-        // sending each provider once is the sane request body. Only known
+        // Deduplicated: the MCP path's ScheduleProvidersSchema preprocess also
+        // dedupes, so both layers send each provider once. Only known
         // account-ID fields are spread above, so extraneous keys from
         // untyped callers never reach the request body.
         providers: [...new Set(providers)],
