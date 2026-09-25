@@ -40,6 +40,7 @@ export interface GenerateVideoJobInput {
   scriptPrompt?: string;
   audioUrl?: string;
   voiceId?: string;
+  videoSubject?: string;
 }
 
 export interface UpdatePersonaInput {
@@ -296,16 +297,18 @@ export class PostEngineerClient {
 
   async generateVideoJob(input: GenerateVideoJobInput): Promise<unknown> {
     // Fail fast for direct (non-MCP) callers, mirroring the MCP schema rules:
-    // faceless generation needs exactly one voice source, and voiceId is
-    // rejected alongside personaId. Blank strings are invalid input, not
-    // absent values (a blank personaId/voiceId/audioUrl is rejected, matching
-    // the schema's min(1) field rules); non-string values from untyped JS
+    // faceless generation needs a non-empty videoSubject and exactly one
+    // voice source, and voiceId is rejected alongside personaId. Blank
+    // strings are invalid input, not absent values (a blank
+    // personaId/voiceId/audioUrl/videoSubject is rejected, matching the
+    // schema's min(1) field rules); non-string values from untyped JS
     // callers get a clear error instead of a TypeError. The server rejects
     // invalid combinations.
     for (const [name, value] of [
       ['personaId', input.personaId],
       ['audioUrl', input.audioUrl],
       ['voiceId', input.voiceId],
+      ['videoSubject', input.videoSubject],
     ] as const) {
       if (value !== undefined && typeof value !== 'string') {
         throw new Error(`${name} must be a string`);
@@ -320,9 +323,19 @@ export class PostEngineerClient {
     if (input.audioUrl !== undefined && input.audioUrl.trim() === '') {
       throw new Error('audioUrl must be an http(s) URL');
     }
+    if (input.videoSubject !== undefined && input.videoSubject.trim() === '') {
+      throw new Error('videoSubject is required for faceless generation');
+    }
     const personaId = trimOptionalString(input.personaId);
     const audioUrl = trimOptionalString(input.audioUrl);
     const voiceId = trimOptionalString(input.voiceId);
+    const videoSubject = trimOptionalString(input.videoSubject);
+    // The web requires a non-empty video_subject for faceless generation;
+    // fail fast here instead of failing server-side after passing voice
+    // validation.
+    if (!personaId && !videoSubject) {
+      throw new Error('videoSubject is required for faceless generation');
+    }
     if (!personaId && !hasExactlyOneVoiceSource(audioUrl, voiceId)) {
       // The "(or provide personaId)" advice only applies when neither source
       // is given; when both are given, providing a personaId would itself be
@@ -345,6 +358,7 @@ export class PostEngineerClient {
         audio_url: audioUrl,
         // Guarded above: voiceId is only present for faceless generation.
         voice_id: voiceId,
+        video_subject: videoSubject,
       }),
     });
 

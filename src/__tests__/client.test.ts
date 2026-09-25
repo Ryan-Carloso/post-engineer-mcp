@@ -413,18 +413,38 @@ describe('PostEngineerClient', () => {
 
     const result = await client.generateVideoJob({
       voiceId: 'voice-calm-1',
+      videoSubject: 'Morning motivation',
     });
 
     const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
     const payload = JSON.parse(fetchBody.body);
     expect(payload).not.toHaveProperty('personaId');
     expect(payload.voice_id).toBe('voice-calm-1');
+    expect(payload.video_subject).toBe('Morning motivation');
     expect(result).toEqual(mockJob);
+  });
+
+  it('throws before the request for faceless generation with no videoSubject', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.generateVideoJob({ voiceId: 'voice-calm-1' })
+    ).rejects.toThrow(/videoSubject is required for faceless generation/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('throws before the request for faceless generation with a blank videoSubject', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.generateVideoJob({ voiceId: 'voice-calm-1', videoSubject: '   ' })
+    ).rejects.toThrow(/videoSubject is required for faceless generation/i);
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('throws before the request for faceless generation with no voice source', async () => {
     global.fetch = vi.fn();
-    await expect(client.generateVideoJob({})).rejects.toThrow(/exactly one of audioUrl or voiceId/i);
+    await expect(
+      client.generateVideoJob({ videoSubject: 'Morning motivation' })
+    ).rejects.toThrow(/exactly one of audioUrl or voiceId/i);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
@@ -434,9 +454,45 @@ describe('PostEngineerClient', () => {
       client.generateVideoJob({
         audioUrl: 'https://cdn.example.com/narracao.mp3',
         voiceId: 'voice-calm-1',
+        videoSubject: 'Morning motivation',
       })
     ).rejects.toThrow(/exactly one of audioUrl or voiceId/i);
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('sends video_subject for faceless generation with audioUrl', async () => {
+    const mockJob = { success: true, taskId: 'task-faceless-10' };
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockJob,
+    });
+
+    await client.generateVideoJob({
+      audioUrl: 'https://cdn.example.com/narracao.mp3',
+      videoSubject: 'Morning motivation',
+    });
+
+    const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
+    const payload = JSON.parse(fetchBody.body);
+    expect(payload.video_subject).toBe('Morning motivation');
+    expect(payload.audio_url).toBe('https://cdn.example.com/narracao.mp3');
+  });
+
+  it('persona mode remains backward compatible without videoSubject', async () => {
+    const mockJob = { success: true, taskId: 'task-persona-7' };
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockJob,
+    });
+
+    await client.generateVideoJob({ personaId: 'persona-123' });
+
+    const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
+    const payload = JSON.parse(fetchBody.body);
+    expect(payload.personaId).toBe('persona-123');
+    expect(vi.mocked(global.fetch)).toHaveBeenCalled();
   });
 
   it('throws when voiceId is used with a personaId', async () => {
@@ -453,7 +509,10 @@ describe('PostEngineerClient', () => {
   it('throws when audioUrl is not an http(s) URL', async () => {
     global.fetch = vi.fn();
     await expect(
-      client.generateVideoJob({ audioUrl: 'ftp://cdn.example.com/audio.mp3' })
+      client.generateVideoJob({
+        audioUrl: 'ftp://cdn.example.com/audio.mp3',
+        videoSubject: 'Morning motivation',
+      })
     ).rejects.toThrow(/http\(s\)/i);
     expect(global.fetch).not.toHaveBeenCalled();
   });
@@ -472,6 +531,7 @@ describe('PostEngineerClient', () => {
       .generateVideoJob({
         audioUrl: 'https://cdn.example.com/a.mp3',
         voiceId: 'voice-calm-1',
+        videoSubject: 'Morning motivation',
       })
       .catch((e: unknown) => e as Error);
     expect(error).toBeInstanceOf(Error);
@@ -525,6 +585,7 @@ describe('PostEngineerClient', () => {
 
     const result = await client.generateVideoJob({
       audioUrl: '  https://cdn.example.com/a.mp3  ',
+      videoSubject: 'Morning motivation',
     });
 
     const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };

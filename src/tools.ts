@@ -116,9 +116,25 @@ export const GenerateVideoObject = z.object({
     .describe(
       'Voice ID for this video (see list_voices). Only used for faceless generation (rejected when personaId is provided); provide this or audioUrl, not both.'
     ),
+  videoSubject: z
+    .string()
+    .trim()
+    .min(1, 'videoSubject is required for faceless generation')
+    .optional()
+    .describe(
+      'Subject/topic of the video. Required for faceless generation (when personaId is omitted); sent as video_subject.'
+    ),
 });
 
 export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) => {
+  if (!val.personaId && !val.videoSubject) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['videoSubject'],
+      message: 'videoSubject is required for faceless generation',
+    });
+    return;
+  }
   if (!val.personaId && !hasExactlyOneVoiceSource(val.audioUrl, val.voiceId)) {
     const neither = !val.audioUrl && !val.voiceId;
     ctx.addIssue({

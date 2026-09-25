@@ -161,7 +161,7 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
 
   server.tool(
     'generate_video_from_persona',
-    'Trigger video generation using an existing persona, or faceless (omit personaId). Faceless: optional scriptPrompt plus exactly one of audioUrl (public http(s) URL) or voiceId (see list_voices) supplies the voice. With a persona: optional scriptPrompt overrides the video script; optional audioUrl supplies custom audio, overriding the persona voice (voiceId is rejected).',
+    'Trigger video generation using an existing persona, or faceless (omit personaId). Faceless: required videoSubject plus exactly one of audioUrl (public http(s) URL) or voiceId (see list_voices) supplies the voice; optional scriptPrompt overrides the script. With a persona: optional scriptPrompt overrides the video script; optional audioUrl supplies custom audio, overriding the persona voice (voiceId is rejected).',
     // Base object shape: the cross-field rules live on GenerateVideoSchema
     // (superRefine) and are enforced in handleGenerateVideo, since the SDK
     // only accepts raw shapes here.

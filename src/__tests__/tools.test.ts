@@ -98,6 +98,7 @@ describe('MCP Tool Handlers', () => {
     vi.clearAllMocks();
     const response = await handleGenerateVideo(mockClient, {
       scriptPrompt: 'Top 3 AI coding assistants in 2026',
+      videoSubject: 'AI coding assistants',
     });
 
     expect(response.isError).toBe(true);
@@ -114,6 +115,7 @@ describe('MCP Tool Handlers', () => {
     const response = await handleGenerateVideo(mockClient, {
       audioUrl: 'https://cdn.example.com/narracao.mp3',
       voiceId: 'voice-calm-1',
+      videoSubject: 'Morning motivation',
     });
 
     expect(response.isError).toBe(true);
@@ -180,10 +182,12 @@ describe('MCP Tool Handlers', () => {
 
     const response = await handleGenerateVideo(mockClient, {
       audioUrl: 'https://cdn.example.com/narracao.mp3',
+      videoSubject: 'Morning motivation',
     });
 
     expect(mockClient.generateVideoJob).toHaveBeenCalledWith({
       audioUrl: 'https://cdn.example.com/narracao.mp3',
+      videoSubject: 'Morning motivation',
     });
     expect(response.content[0].text).toContain('task-faceless-1');
   });
@@ -192,8 +196,10 @@ describe('MCP Tool Handlers', () => {
     it('parses without personaId for faceless generation', () => {
       const parsed = GenerateVideoSchema.parse({
         audioUrl: 'https://cdn.example.com/narracao.mp3',
+        videoSubject: 'Morning motivation',
       });
       expect(parsed.personaId).toBeUndefined();
+      expect(parsed.videoSubject).toBe('Morning motivation');
     });
 
     it('rejects an empty-string personaId', () => {
@@ -211,10 +217,19 @@ describe('MCP Tool Handlers', () => {
       ).toThrow(/voiceId is only used for faceless generation/i);
     });
 
-    it('rejects a call with no personaId, audioUrl, or voiceId', () => {
+    it('rejects faceless generation with no videoSubject', () => {
       expect(() => GenerateVideoSchema.parse({ scriptPrompt: 'hello' })).toThrow(
-        /audioUrl or voiceId/i
+        /videoSubject is required for faceless generation/i
       );
+    });
+
+    it('rejects a blank videoSubject for faceless generation', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          audioUrl: 'https://cdn.example.com/narracao.mp3',
+          videoSubject: '   ',
+        })
+      ).toThrow(/videoSubject is required for faceless generation/i);
     });
 
     it('rejects faceless generation with both audioUrl and voiceId', () => {
@@ -222,6 +237,7 @@ describe('MCP Tool Handlers', () => {
         GenerateVideoSchema.parse({
           audioUrl: 'https://cdn.example.com/narracao.mp3',
           voiceId: 'voice-calm-1',
+          videoSubject: 'Morning motivation',
         })
       ).toThrow(/exactly one/i);
     });
@@ -236,7 +252,10 @@ describe('MCP Tool Handlers', () => {
     });
 
     it('accepts faceless generation with only voiceId', () => {
-      const parsed = GenerateVideoSchema.parse({ voiceId: 'voice-calm-1' });
+      const parsed = GenerateVideoSchema.parse({
+        voiceId: 'voice-calm-1',
+        videoSubject: 'Morning motivation',
+      });
       expect(parsed.voiceId).toBe('voice-calm-1');
       expect(parsed.personaId).toBeUndefined();
     });
