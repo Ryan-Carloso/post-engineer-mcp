@@ -6,14 +6,21 @@ import { z } from 'zod';
 
 export const MAX_BATCH_ITEMS = 30;
 
+// Legacy fixed-offset aliases (EST, PST, ...) are rejected separately on the
+// raw input (see the timezone field below): canonicalizing them would silently
+// rewrite a fixed-offset zone to a DST-observing one (e.g. PST ->
+// America/Los_Angeles).
+const LEGACY_FIXED_OFFSET_ALIAS = /^(EST|MST|HST|PST|EST5EDT|CST6CDT|MST7MDT|PST8PDT)$/i;
+
 // IANA timezone check. UTC-offset strings ("+05:30", "+05") and GMT/UTC
 // offset aliases ("GMT+5") are rejected explicitly first. Otherwise the input
 // is canonicalized via resolvedOptions().timeZone (so links like
 // "US/Pacific" and any casing like "utc" resolve to their canonical IDs) and
 // the canonical ID is validated against Intl.supportedValuesOf('timeZone')
-// where available. 'UTC' is a valid IANA zone but is missing from
-// supportedValuesOf on some builds, so it is allowed explicitly. On runtimes
-// without supportedValuesOf, the constructor check alone decides.
+// where available. 'UTC' and the 'Etc/UTC' + 'Etc/GMT±H' family are valid IANA
+// zones but are missing from supportedValuesOf on some builds, so they are
+// allowed explicitly. On runtimes without supportedValuesOf, the constructor
+// check alone decides.
 const isIanaTimezone = (tz: string): boolean => {
   if (/^[+-]\d{1,2}(:?\d{2})?$/.test(tz)) return false;
   if (/^(?:GMT|UTC)[+-]\d{1,2}(:?\d{2})?$/i.test(tz)) return false;
@@ -24,6 +31,7 @@ const isIanaTimezone = (tz: string): boolean => {
     return false;
   }
   if (canonical === 'UTC') return true;
+  if (/^Etc\/(UTC|GMT([+-]\d{1,2})?)$/.test(canonical)) return true;
   const supportedValuesOf = (
     Intl as unknown as { supportedValuesOf?: (key: string) => string[] }
   ).supportedValuesOf;
@@ -71,6 +79,10 @@ export const scheduleVideoBatchParams = {
   timezone: z
     .string()
     .min(1, 'timezone is required')
+    .refine((tz) => !LEGACY_FIXED_OFFSET_ALIAS.test(tz), {
+      message:
+        'use a canonical IANA zone (e.g. "America/New_York") instead of a legacy fixed-offset alias like "EST"',
+    })
     .transform((tz) => {
       // Resolve aliases/links and any casing to the canonical IANA ID so the
       // backend always receives the canonical value. Invalid zones fall

@@ -103,12 +103,27 @@ describe('ScheduleVideoBatchSchema', () => {
     ).toBe(true);
   });
 
-  it.each(['EST', 'PST', 'US/Pacific', 'utc', 'america/new_york'])(
+  it.each(['US/Pacific', 'utc', 'america/new_york'])(
     'resolves %s to its canonical IANA zone',
     (timezone) => {
       expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone }).success).toBe(true);
     },
   );
+
+  it.each(['EST', 'PST', 'MST', 'EST5EDT'])(
+    'rejects the legacy fixed-offset alias %s',
+    (timezone) => {
+      const result = ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].message).toMatch(/legacy fixed-offset alias/);
+      }
+    },
+  );
+
+  it.each(['Etc/UTC', 'Etc/GMT+5', 'Etc/GMT-14'])('accepts the IANA zone %s', (timezone) => {
+    expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone }).success).toBe(true);
+  });
 
   it('parses the timezone to its canonical ID', () => {
     const parsed = ScheduleVideoBatchSchema.parse({ ...validArgs, timezone: 'america/new_york' });
@@ -338,6 +353,22 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     const client = new PostEngineerClient({ apiKey: 'key' });
     await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(
       /check list_schedules before retrying/,
+    );
+  });
+
+  it('keeps the status and hazard when the error body cannot be read', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: () => Promise.reject(new Error('connection reset')),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(
+      /Failed to schedule video batch: 500 .*check list_schedules before retrying/,
     );
   });
 
