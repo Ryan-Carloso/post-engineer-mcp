@@ -650,6 +650,32 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('rejects a non-array account-ID field with an accurate type error', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.createSchedule({
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: 'yt-1' as unknown as string[],
+      })
+    ).rejects.toThrow(/youtubeAccountIds must be an array of strings/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('reports every missing provider at once', async () => {
+    global.fetch = vi.fn();
+    const error = await client
+      .createSchedule({
+        personaId: 'persona-123',
+        providers: ['youtube', 'bluesky'],
+      })
+      .catch((e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toMatch(/youtubeAccountIds.*empty/i);
+    expect(error.message).toMatch(/blueskyAccountIds.*empty/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('calls schedule API when scheduledAt is >= 24h away', async () => {
     const mockSchedule = { success: true, scheduleId: 'sched-123' };
     global.fetch = vi.fn().mockResolvedValue({

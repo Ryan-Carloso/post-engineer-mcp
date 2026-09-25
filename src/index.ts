@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { PostEngineerClient } from './client.js';
-import { SCHEDULE_PROVIDER_NAMES } from './shared.js';
+import { SCHEDULE_PROVIDER_NAMES, providerDisplayName } from './shared.js';
 import {
   handleCreatePersona,
   handleListPersonas,
@@ -99,7 +99,7 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
 
   server.tool(
     'list_social_accounts',
-    `List connected social accounts (${SCHEDULE_PROVIDER_NAMES.map((p) => p[0].toUpperCase() + p.slice(1)).join(', ')}) with the account IDs needed for schedule_video.`,
+    `List connected social accounts (${SCHEDULE_PROVIDER_NAMES.map(providerDisplayName).join(', ')}) with the account IDs needed for schedule_video.`,
     {},
     async () => {
       return handleListSocialAccounts(apiClient);

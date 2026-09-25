@@ -381,7 +381,7 @@ export class PostEngineerClient {
     // Mirror the MCP schema's superRefine rules and fail fast instead of
     // hitting the server (or throwing a TypeError). The per-provider
     // account-ID rule itself lives in shared findProvidersMissingAccountIds;
-    // the extra shape checks below are untyped-JS-caller hardening that zod
+    // the shape checks below are untyped-JS-caller hardening that zod
     // handles on the MCP path.
     if (!Array.isArray(input.providers) || input.providers.length === 0) {
       throw new Error('providers must be a non-empty array');
@@ -393,19 +393,17 @@ export class PostEngineerClient {
         );
       }
     }
-    const missingAccountIds = findProvidersMissingAccountIds(input.providers, (field) => {
-      const ids = input[field];
-      return Array.isArray(ids) ? ids : undefined;
-    });
-    if (missingAccountIds.length > 0) {
-      throw new Error(missingAccountIds[0].message);
-    }
-    for (const provider of new Set(input.providers)) {
+    // Shape + element validation for every account-ID field (declared or
+    // not), mirroring the schema's array(z.string().trim().min(1)): a
+    // non-array field gets an accurate type error instead of a misleading
+    // "is empty", and padded IDs (' a ') converge on trimmed values in the
+    // payload builder below on both paths.
+    for (const provider of SCHEDULE_PROVIDER_NAMES) {
       const field = providerAccountIdsField(provider);
       const ids = input[field];
-      // Note: like the schema's array(z.string().min(1)), padded IDs (' a ')
-      // pass validation here; both paths converge on trimmed IDs in the
-      // payload builder below.
+      if (ids !== undefined && !Array.isArray(ids)) {
+        throw new Error(`${field} must be an array of strings`);
+      }
       if (Array.isArray(ids)) {
         for (const id of ids) {
           if (typeof id !== 'string' || id.trim() === '') {
@@ -414,16 +412,21 @@ export class PostEngineerClient {
         }
       }
     }
+    const missingAccountIds = findProvidersMissingAccountIds(input.providers, (field) => input[field]);
+    if (missingAccountIds.length > 0) {
+      // Report every missing provider at once, like the schema's superRefine,
+      // so callers don't fix one error at a time.
+      throw new Error(missingAccountIds.map((issue) => issue.message).join('; '));
+    }
 
     const url = `${this.baseUrl}/api/schedule`;
     // Account-ID fields are derived from the shared provider list via the
     // shared field-name helper so a new provider cannot be silently dropped
-    // from the payload. IDs are trimmed defensively (validated above).
+    // from the payload. All fields were validated as string arrays above.
     const accountIds = Object.fromEntries(
       SCHEDULE_PROVIDER_NAMES.map((provider) => {
         const field = providerAccountIdsField(provider);
-        const ids = input[field];
-        return [field, Array.isArray(ids) ? ids.map((id) => (typeof id === 'string' ? id.trim() : id)) : []];
+        return [field, (input[field] ?? []).map((id) => id.trim())];
       })
     );
     const response = await fetch(url, {

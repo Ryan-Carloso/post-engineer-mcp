@@ -102,6 +102,7 @@ export const GenerateVideoObject = z.object({
   scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
   audioUrl: z
     .string()
+    .trim()
     .refine(isValidHttpUrl, 'audioUrl must be an http(s) URL')
     .optional()
     .describe(

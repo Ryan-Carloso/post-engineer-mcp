@@ -15,6 +15,11 @@ export function providerAccountIdsField(provider: ScheduleProvider): ProviderAcc
   return `${provider}AccountIds`;
 }
 
+/** Human-readable provider label, e.g. 'youtube' -> 'Youtube'. */
+export function providerDisplayName(provider: ScheduleProvider): string {
+  return provider[0].toUpperCase() + provider.slice(1);
+}
+
 export interface ProviderAccountIssue {
   provider: ScheduleProvider;
   field: ProviderAccountIdsField;
