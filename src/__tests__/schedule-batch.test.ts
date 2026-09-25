@@ -79,7 +79,7 @@ describe('ScheduleVideoBatchSchema', () => {
     expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: 'UTC' }).success).toBe(true);
   });
 
-  it.each(['+05:30', '+0530', '-08:00', '+05', '-08'])('rejects UTC-offset string %s as timezone', (timezone) => {
+  it.each(['+05:30', '+0530', '-08:00', '+05', '-08', 'GMT+5'])('rejects UTC-offset string %s as timezone', (timezone) => {
     const result = ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone });
     expect(result.success).toBe(false);
   });

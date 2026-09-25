@@ -1,3 +1,5 @@
+import { MAX_BATCH_ITEMS } from './schemas.js';
+
 const SERVICE_NAME = 'Post Engineer MCP';
 const MCP_ENDPOINT = 'https://mcp.post-engineer.com/';
 
@@ -76,7 +78,7 @@ For OpenCode, Claude Desktop, Cursor, and other local clients using stdio:
 - \`list_social_accounts\`
 - \`connect_account\` — connect a social account (OAuth URL for youtube/instagram/linkedin; direct connect for bluesky with handle + appPassword)
 - \`schedule_video\`
-- \`schedule_video_batch\` — schedule a finite manual batch (1-30 videos, one topic each; each provider needs a connected account, batch targets all of them; tokens charged upfront)
+- \`schedule_video_batch\` — schedule a finite manual batch (1-${MAX_BATCH_ITEMS} videos, one topic each; each provider needs a connected account, batch targets all of them; tokens charged upfront)
 - \`list_schedules\`
 - \`list_posts\` — upcoming (scheduled) and past (published/failed) posts across all connected accounts
 - \`cancel_schedule\`

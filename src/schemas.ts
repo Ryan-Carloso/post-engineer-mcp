@@ -8,9 +8,12 @@ export const MAX_BATCH_ITEMS = 30;
 
 // IANA timezone check via the Intl constructor (throws on unknown zones).
 // The constructor also accepts UTC-offset strings like "+05:30" or "+05",
-// which are not IANA zone IDs, so those are rejected explicitly.
+// which are not IANA zone IDs, so those are rejected explicitly. GMT/UTC
+// offset aliases (e.g. "GMT+5") vary across ICU builds, so they are rejected
+// here too rather than relying on the constructor.
 const isIanaTimezone = (tz: string): boolean => {
   if (/^[+-]\d{1,2}(:?\d{2})?$/.test(tz)) return false;
+  if (/^(?:GMT|UTC)[+-]\d{1,2}(:?\d{2})?$/i.test(tz)) return false;
   try {
     new Intl.DateTimeFormat('en', { timeZone: tz });
     return true;
