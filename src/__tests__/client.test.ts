@@ -839,6 +839,35 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('rejects a blank timezone and trims a padded one, like the schema', async () => {
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
+    await expect(
+      client.createSchedule({
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: validTime,
+        timezone: '   ',
+        _nowForTesting: now,
+      })
+    ).rejects.toThrow(/timezone must not be empty/i);
+
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    await client.createSchedule({
+      personaId: 'persona-123',
+      providers: ['youtube'],
+      youtubeAccountIds: ['yt-1'],
+      scheduledAt: validTime,
+      timezone: '  America/Sao_Paulo  ',
+      _nowForTesting: now,
+    });
+    const payload = JSON.parse(
+      (global.fetch as unknown as { mock: { calls: Array<[string, { body: string }]> } }).mock.calls[0][1].body
+    );
+    expect(payload.timezone).toBe('America/Sao_Paulo');
+  });
+
   it('rejects empty providers without calling API', async () => {
     global.fetch = vi.fn();
     const now = new Date('2026-09-18T09:00:00.000Z');

@@ -55,6 +55,8 @@ export function accountIdFieldTypeMessage(field: ProviderAccountIdsField): strin
 export const PROVIDERS_REQUIRED_MESSAGE = 'At least one provider required';
 /** Non-array providers from untyped callers — distinct from "none given". */
 export const PROVIDERS_TYPE_MESSAGE = 'providers must be an array of provider names';
+/** Explicitly-provided but blank timezone — distinct from "omitted" (defaults to UTC). */
+export const TIMEZONE_EMPTY_MESSAGE = 'timezone must not be empty';
 export const SCHEDULED_AT_REQUIRED_MESSAGE =
   'scheduledAt is required (ISO date time, between 24h and 30 days in the future)';
 

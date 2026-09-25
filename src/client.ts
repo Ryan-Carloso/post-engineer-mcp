@@ -9,6 +9,7 @@ import {
   PROVIDERS_TYPE_MESSAGE,
   SCHEDULED_AT_REQUIRED_MESSAGE,
   SCHEDULED_AT_TYPE_MESSAGE,
+  TIMEZONE_EMPTY_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
   VOICE_ID_EMPTY_MESSAGE,
   accountIdElementMessage,
@@ -511,8 +512,15 @@ export class PostEngineerClient {
     ) {
       throw new Error(scheduleWindowMessage('postsPerDay'));
     }
+    // Trimmed like every other string field here: a padded value (' UTC ')
+    // is normalized, and an explicit blank is rejected rather than
+    // silently disabling the 'UTC' default.
     if (input.timezone !== undefined && typeof input.timezone !== 'string') {
       throw new Error(stringFieldMessage('timezone'));
+    }
+    const timezone = input.timezone?.trim();
+    if (timezone === '') {
+      throw new Error(TIMEZONE_EMPTY_MESSAGE);
     }
 
     const url = `${this.baseUrl}/api/schedule`;
@@ -541,7 +549,7 @@ export class PostEngineerClient {
         startHour: input.startHour,
         endHour: input.endHour,
         postsPerDay: input.postsPerDay,
-        timezone: input.timezone ?? 'UTC',
+        timezone: timezone ?? 'UTC',
       }),
     });
 

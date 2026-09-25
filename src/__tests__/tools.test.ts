@@ -332,7 +332,34 @@ describe('MCP Tool Handlers', () => {
       );
     });
 
-    it('does not add cross-field issues when a field-level rule fails, like the client', () => {
+    it('trims a padded timezone and rejects a blank one, like the client', () => {
+    const padded = ScheduleVideoSchema.safeParse({
+      personaId: 'persona-123',
+      providers: ['youtube'],
+      youtubeAccountIds: ['yt-1'],
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+      timezone: '  America/Sao_Paulo  ',
+    });
+    expect(padded.success).toBe(true);
+    if (padded.success) {
+      expect(padded.data.timezone).toBe('America/Sao_Paulo');
+    }
+    const blank = ScheduleVideoSchema.safeParse({
+      personaId: 'persona-123',
+      providers: ['youtube'],
+      youtubeAccountIds: ['yt-1'],
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+      timezone: '   ',
+    });
+    expect(blank.success).toBe(false);
+    if (!blank.success) {
+      expect(blank.error.issues.map((issue) => issue.message)).toEqual([
+        'timezone must not be empty',
+      ]);
+    }
+  });
+
+  it('does not add cross-field issues when a field-level rule fails, like the client', () => {
     // The direct client throws the first field-level error and never
     // reaches the cross-field rules; the schema must not report extra,
     // misleading issues on top of the field-level failure.

@@ -8,6 +8,7 @@ import {
   PROVIDERS_REQUIRED_MESSAGE,
   PROVIDERS_TYPE_MESSAGE,
   SCHEDULED_AT_REQUIRED_MESSAGE,
+  TIMEZONE_EMPTY_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
   VOICE_ID_EMPTY_MESSAGE,
   accountIdElementMessage,
@@ -141,22 +142,10 @@ export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) =>
   // schema must not add cross-field issues on top of a field-level
   // failure — otherwise MCP callers see extra, misleading issues for the
   // same input (e.g. "videoSubject is required" for a request whose real
-  // problem is a blank personaId). The checks mirror the field chains
-  // above; every value is trimmed by the time superRefine runs. Non-string
-  // inputs reach here too (zod still runs superRefine when a field's
-  // invalid_type check fails), so the typeof guards mirror the client's
-  // type-guard loop.
-  const fieldLevelFailed =
-    (val.personaId !== undefined &&
-      (typeof val.personaId !== 'string' || val.personaId === '')) ||
-    (val.audioUrl !== undefined &&
-      (typeof val.audioUrl !== 'string' ||
-        val.audioUrl === '' ||
-        !isValidHttpUrl(val.audioUrl))) ||
-    (val.voiceId !== undefined &&
-      (typeof val.voiceId !== 'string' || val.voiceId === '')) ||
-    (val.videoSubject !== undefined && typeof val.videoSubject !== 'string');
-  if (fieldLevelFailed) {
+  // problem is a blank personaId). The flag is derived by re-running the
+  // base object's field chains instead of mirroring them by hand, so the
+  // field chains stay the single source of truth.
+  if (!GenerateVideoObject.safeParse(val).success) {
     return;
   }
   // Cross-field rules are shared with the direct client
@@ -243,7 +232,7 @@ export const ScheduleVideoObject = z.object({
   startHour: z.number().int().min(0).max(23).optional(),
   endHour: z.number().int().min(0).max(23).optional(),
   postsPerDay: z.number().int().min(1).max(10).optional(),
-  timezone: z.string().optional().default('UTC'),
+  timezone: z.string().trim().min(1, TIMEZONE_EMPTY_MESSAGE).optional().default('UTC'),
 });
 
 export const ScheduleVideoSchema = ScheduleVideoObject.superRefine((val, ctx) => {
