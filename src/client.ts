@@ -383,7 +383,7 @@ export class PostEngineerClient {
       throw new Error(`Failed to schedule video batch: ${detail}${code}`);
     }
 
-    if (typeof body.scheduleId !== 'string' || body.scheduleId.length === 0) {
+    if (body === null || typeof body.scheduleId !== 'string' || body.scheduleId.length === 0) {
       throw new Error('Failed to schedule video batch: response was missing the scheduleId');
     }
 

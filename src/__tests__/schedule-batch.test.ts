@@ -196,6 +196,19 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/missing the scheduleId/);
   });
 
+  it('throws a clean error when the 200 body is JSON null', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(null),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/missing the scheduleId/);
+  });
+
   it('uses the code when success: false has a code but no error', async () => {
     vi.stubGlobal(
       'fetch',
