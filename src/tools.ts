@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ScheduleVideoBatchSchema } from './schemas.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { PostEngineerClient } from './client.js';
 
@@ -79,7 +80,6 @@ export const ScheduleVideoSchema = z.object({
   timezone: z.string().optional().default('UTC'),
 });
 
-import { ScheduleVideoBatchSchema } from './schemas.js';
 
 export async function handleCreatePersona(
   client: PostEngineerClient,
