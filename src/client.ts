@@ -1,7 +1,7 @@
 import { validateScheduleAdvance } from './validator.js';
 import type { z } from 'zod';
-import type { ScheduleVideoBatchSchema, ScheduleVideoBatchResponse } from './schemas.js';
-import { ScheduleVideoBatchResponseSchema } from './schemas.js';
+import type { ScheduleVideoBatchResponse } from './schemas.js';
+import { ScheduleVideoBatchSchema, ScheduleVideoBatchResponseSchema } from './schemas.js';
 
 export interface PostEngineerClientOptions {
   apiKey?: string;
@@ -356,13 +356,17 @@ export class PostEngineerClient {
   }
 
   async scheduleVideoBatch(input: ScheduleVideoBatchInput): Promise<ScheduleVideoBatchResponse> {
+    // Defense-in-depth: the MCP boundary validates first, but direct library
+    // consumers bypass it. This also enforces the trim/transform invariants
+    // (topic trimming, canonical timezone) the slots.length check relies on.
+    const validated = ScheduleVideoBatchSchema.parse(input);
     const url = `${this.baseUrl}/api/schedule/batch`;
     let response: Response;
     try {
       response = await fetch(url, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify(input),
+        body: JSON.stringify(validated),
         // A hanging server must not block the tool call forever; an abort
         // lands in the network-error catch below with the retry hazard.
         signal: AbortSignal.timeout(60_000),

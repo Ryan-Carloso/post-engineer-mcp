@@ -131,20 +131,20 @@ describe('ScheduleVideoBatchSchema', () => {
     ).toBe(true);
   });
 
-  it.each(['US/Pacific', 'utc', 'america/new_york'])(
+  it.each(['utc', 'america/new_york'])(
     'resolves %s to its canonical IANA zone',
     (timezone) => {
       expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone }).success).toBe(true);
     },
   );
 
-  it.each(['EST', 'PST', 'MST', 'CST', 'EST5EDT', 'AKST', 'AKDT'])(
-    'rejects the legacy fixed-offset alias %s',
+  it.each(['US/Pacific', 'EST', 'PST', 'MST', 'CST', 'IST', 'JST', 'EST5EDT', 'AKST', 'AKDT'])(
+    'rejects the non-canonical zone %s instead of silently rewriting it',
     (timezone) => {
       const result = ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone });
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.issues[0].message).toMatch(/legacy fixed-offset alias/);
+        expect(result.error.issues[0].message).toMatch(/canonical IANA zone/);
       }
     },
   );
@@ -443,6 +443,18 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(
       /network error.*check list_schedules before retrying/,
     );
+  });
+
+  it('validates input client-side and never hits the network on invalid input', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch({ ...validArgs, items: [] })).rejects.toThrow();
+    await expect(
+      client.scheduleVideoBatch({ ...validArgs, timezone: 'GMT+5' }),
+    ).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('includes the retry hazard on a network error', async () => {
