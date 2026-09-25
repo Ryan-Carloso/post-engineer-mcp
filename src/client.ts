@@ -3,28 +3,22 @@ import type { ProviderAccountIdsField, ScheduleProvider } from './shared.js';
 import {
   AUDIO_URL_EMPTY_MESSAGE,
   AUDIO_URL_INVALID_MESSAGE,
-  FACELESS_VOICE_BOTH_MESSAGE,
-  FACELESS_VOICE_MESSAGE,
   INPUT_OBJECT_MESSAGE,
   PERSONA_ID_REQUIRED_MESSAGE,
-  PERSONA_VOICE_ID_MESSAGE,
   PROVIDERS_REQUIRED_MESSAGE,
   SCHEDULED_AT_REQUIRED_MESSAGE,
   SCHEDULED_AT_TYPE_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
-  VIDEO_SUBJECT_NON_EMPTY_MESSAGE,
-  VIDEO_SUBJECT_REQUIRED_MESSAGE,
   VOICE_ID_EMPTY_MESSAGE,
   accountIdElementMessage,
   accountIdFieldTypeMessage,
   findProvidersMissingAccountIds,
-  hasExactlyOneVoiceSource,
   isScheduleProvider,
   isValidHttpUrl,
   providerAccountIdsField,
   stringFieldMessage,
-  trimOptionalString,
   unknownProviderMessage,
+  validateGenerateVideoFields,
 } from './shared.js';
 
 export interface PostEngineerClientOptions {
@@ -315,26 +309,11 @@ export class PostEngineerClient {
     if (typeof input !== 'object' || input === null) {
       throw new Error(INPUT_OBJECT_MESSAGE);
     }
-    // Fail fast for direct (non-MCP) callers, mirroring the MCP schema rules:
-    // faceless generation needs a non-empty videoSubject and exactly one
-    // voice source, and voiceId is rejected alongside personaId. Blank
-    // strings are invalid input, not absent values (a blank
-    // personaId/voiceId/audioUrl/videoSubject is rejected, matching the
-    // schema's min(1) field rules); non-string values from untyped JS
-    // callers get a clear error instead of a TypeError. The server rejects
-    // invalid combinations.
-    //
-    // Why the explicit per-field blank checks instead of relying on
-    // trimOptionalString + the rule guards below: (1) a blank personaId
-    // must be rejected, not normalized to undefined — normalizing would
-    // silently flip the call to faceless mode; (2) the field-specific
-    // messages match the schema's min(1) field rules, so both paths report
-    // the same message for the same input.
+    // Fail fast for direct (non-MCP) callers, mirroring the MCP schema rules.
     // Single source of truth for the string fields: the type-guard loop and
-    // the trim step below read the same object, so a future field can't be
-    // added to one but not the other — a missed field would let
-    // trimOptionalString silently coerce a non-string to undefined and flip
-    // the call's mode instead of erroring.
+    // the normalize step read the same object, so a future field can't be
+    // added to one but not the other — a missed field would let a non-string
+    // slip through instead of erroring.
     const rawFields = {
       personaId: input.personaId,
       scriptPrompt: input.scriptPrompt,
@@ -347,49 +326,33 @@ export class PostEngineerClient {
         throw new Error(stringFieldMessage(name));
       }
     }
-    if (typeof rawFields.personaId === 'string' && rawFields.personaId.trim() === '') {
+    // Normalize once, then validate the normalized values. Blank stays ''
+    // here (not coerced to undefined) so the checks below can distinguish
+    // "provided but blank" from "omitted".
+    const trim = (value: string | undefined): string | undefined => value?.trim();
+    const personaId = trim(rawFields.personaId);
+    const scriptPrompt = trim(rawFields.scriptPrompt);
+    const audioUrl = trim(rawFields.audioUrl);
+    const voiceId = trim(rawFields.voiceId);
+    const videoSubject = trim(rawFields.videoSubject);
+    // Field-level blank checks, mirroring the schema's min(1) field rules: a
+    // blank personaId must be rejected, not normalized to undefined —
+    // normalizing would silently flip the call to faceless mode.
+    if (personaId === '') {
       throw new Error(PERSONA_ID_REQUIRED_MESSAGE);
     }
-    if (rawFields.voiceId !== undefined && rawFields.voiceId.trim() === '') {
+    if (voiceId === '') {
       throw new Error(VOICE_ID_EMPTY_MESSAGE);
     }
-    if (rawFields.audioUrl !== undefined && rawFields.audioUrl.trim() === '') {
+    if (audioUrl === '') {
       throw new Error(AUDIO_URL_EMPTY_MESSAGE);
     }
-    if (rawFields.videoSubject !== undefined && rawFields.videoSubject.trim() === '') {
-      // A blank videoSubject is only "required" in faceless mode; alongside
-      // a persona it's an invalid override, so report that instead of the
-      // faceless-worded shared message.
-      throw new Error(
-        trimOptionalString(rawFields.personaId) !== undefined
-          ? VIDEO_SUBJECT_NON_EMPTY_MESSAGE
-          : VIDEO_SUBJECT_REQUIRED_MESSAGE
-      );
-    }
-    const personaId = trimOptionalString(rawFields.personaId);
-    const audioUrl = trimOptionalString(rawFields.audioUrl);
-    const voiceId = trimOptionalString(rawFields.voiceId);
-    const videoSubject = trimOptionalString(rawFields.videoSubject);
-    // The web requires a non-empty video_subject for faceless generation;
-    // fail fast here instead of failing server-side after passing voice
-    // validation. Both faceless issues are reported together (joined), like
-    // the schema's superRefine and createSchedule's missing-account-ID
-    // aggregation, so the caller isn't sent fix-one-retry-fix-another.
-    const facelessIssues: string[] = [];
-    if (!personaId && !videoSubject) {
-      facelessIssues.push(VIDEO_SUBJECT_REQUIRED_MESSAGE);
-    }
-    if (!personaId && !hasExactlyOneVoiceSource(audioUrl, voiceId)) {
-      // The "(or provide personaId)" advice only applies when neither source
-      // is given; when both are given, providing a personaId would itself be
-      // rejected by the next guard.
-      facelessIssues.push(audioUrl && voiceId ? FACELESS_VOICE_BOTH_MESSAGE : FACELESS_VOICE_MESSAGE);
-    }
-    if (facelessIssues.length > 0) {
-      throw new Error(facelessIssues.join('; '));
-    }
-    if (personaId && voiceId) {
-      throw new Error(PERSONA_VOICE_ID_MESSAGE);
+    // Cross-field rules are shared with the MCP schema
+    // (validateGenerateVideoFields) so the layers can't diverge; every
+    // applicable issue is reported at once, like the schema's superRefine.
+    const issues = validateGenerateVideoFields({ personaId, audioUrl, voiceId, videoSubject });
+    if (issues.length > 0) {
+      throw new Error(issues.map((issue) => issue.message).join('; '));
     }
     if (audioUrl && !isValidHttpUrl(audioUrl)) {
       throw new Error(AUDIO_URL_INVALID_MESSAGE);
@@ -400,17 +363,17 @@ export class PostEngineerClient {
       headers: this.getHeaders(),
       body: JSON.stringify({
         personaId,
-        // A blank scriptPrompt is normalized to undefined (dropped), not an
+        // A blank scriptPrompt normalizes to undefined (dropped), not an
         // error: unlike the validated fields above, an empty override is
         // meaningless rather than invalid. undefined values are omitted by
         // JSON.stringify; an explicit videoSubject alongside personaId is a
         // topic override (the web prefers it over the persona's default
         // niche) and is sent intentionally, not by accident.
-        video_script_prompt: trimOptionalString(input.scriptPrompt),
+        video_script_prompt: scriptPrompt || undefined,
         audio_url: audioUrl,
         // Guarded above: voiceId is only present for faceless generation.
         voice_id: voiceId,
-        video_subject: videoSubject,
+        video_subject: videoSubject || undefined,
       }),
     });
 

@@ -128,9 +128,12 @@ export function hasExactlyOneVoiceSource(audioUrl?: string, voiceId?: string): b
 }
 
 /**
- * Trim an optional free-text input. Non-string values (possible from untyped
- * JS callers) are treated as absent so they surface as a clear validation
- * error instead of a TypeError on .trim().
+ * Trim an optional free-text input. Blank strings normalize to undefined
+ * (absent). Non-string values also coerce to undefined, so this is
+ * normalization only, not validation — callers must reject non-strings
+ * beforehand (the client's type-guard loop and the schema's
+ * invalid_type_error do this) to get a clear error instead of silent
+ * coercion.
  */
 export function trimOptionalString(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
@@ -154,4 +157,55 @@ export function isValidHttpUrl(value: string): boolean {
 /** e.g. 'Unknown provider "tiktok". Must be one of: youtube, instagram, linkedin, bluesky'. */
 export function unknownProviderMessage(provider: unknown): string {
   return `Unknown provider ${JSON.stringify(provider)}. Must be one of: ${SCHEDULE_PROVIDER_NAMES.join(', ')}`;
+}
+
+/** Trimmed video-generation fields for cross-field validation. */
+export interface GenerateVideoFields {
+  personaId?: string;
+  audioUrl?: string;
+  voiceId?: string;
+  videoSubject?: string;
+}
+
+/** One cross-field rule violation: message plus the schema path to blame. */
+export interface GenerateVideoIssue {
+  path: string[];
+  message: string;
+}
+
+/**
+ * Cross-field rules for video generation, shared by the MCP schema's
+ * superRefine and the direct client's fail-fast guards so a rule change
+ * can't be made in one layer but not the other.
+ *
+ * Contract: values are already trimmed. A provided-but-blank videoSubject
+ * arrives as '' (blank stays blank here); other blank fields are rejected
+ * by the field-level min(1) rules before this runs, so they arrive as
+ * non-empty or undefined.
+ */
+export function validateGenerateVideoFields(fields: GenerateVideoFields): GenerateVideoIssue[] {
+  const { personaId, audioUrl, voiceId } = fields;
+  const issues: GenerateVideoIssue[] = [];
+  const issue = (path: string[], message: string): void => {
+    issues.push({ path, message });
+  };
+  if (fields.videoSubject === '') {
+    // Provided-but-blank: alongside a persona it's an invalid override, in
+    // faceless mode a missing requirement.
+    issue(
+      ['videoSubject'],
+      personaId ? VIDEO_SUBJECT_NON_EMPTY_MESSAGE : VIDEO_SUBJECT_REQUIRED_MESSAGE
+    );
+  } else if (!personaId && !fields.videoSubject) {
+    issue(['videoSubject'], VIDEO_SUBJECT_REQUIRED_MESSAGE);
+  }
+  if (!personaId && !hasExactlyOneVoiceSource(audioUrl, voiceId)) {
+    // Form-level issue (path []): the combination is wrong, not one field
+    // alone — blaming only voiceId would mislead callers.
+    issue([], audioUrl && voiceId ? FACELESS_VOICE_BOTH_MESSAGE : FACELESS_VOICE_MESSAGE);
+  }
+  if (personaId && voiceId) {
+    issue(['voiceId'], PERSONA_VOICE_ID_MESSAGE);
+  }
+  return issues;
 }

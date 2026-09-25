@@ -4,23 +4,19 @@ import type { PostEngineerClient } from './client.js';
 import {
   AUDIO_URL_EMPTY_MESSAGE,
   AUDIO_URL_INVALID_MESSAGE,
-  FACELESS_VOICE_BOTH_MESSAGE,
-  FACELESS_VOICE_MESSAGE,
   PERSONA_ID_REQUIRED_MESSAGE,
-  PERSONA_VOICE_ID_MESSAGE,
   PROVIDERS_REQUIRED_MESSAGE,
   SCHEDULED_AT_REQUIRED_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
-  VIDEO_SUBJECT_NON_EMPTY_MESSAGE,
-  VIDEO_SUBJECT_REQUIRED_MESSAGE,
   VOICE_ID_EMPTY_MESSAGE,
   accountIdElementMessage,
   accountIdFieldTypeMessage,
   findProvidersMissingAccountIds,
-  hasExactlyOneVoiceSource,
   isValidHttpUrl,
   providerAccountIdsField,
   stringFieldMessage,
+  unknownProviderMessage,
+  validateGenerateVideoFields,
 } from './shared.js';
 import type { ProviderAccountIdsField } from './shared.js';
 
@@ -139,41 +135,16 @@ export const GenerateVideoObject = z.object({
 });
 
 export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) => {
-  // No early returns: report every applicable issue at once so the caller
-  // isn't sent fix-one-retry-fix-another. The faceless branches and the
-  // persona branch are mutually exclusive (personaId falsy vs truthy), so
-  // falling through is safe.
-  if (val.videoSubject === '') {
-    // Provided-but-blank (post-trim): context-aware — alongside a persona
-    // it's an invalid override, in faceless mode a missing requirement.
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['videoSubject'],
-      message: val.personaId ? VIDEO_SUBJECT_NON_EMPTY_MESSAGE : VIDEO_SUBJECT_REQUIRED_MESSAGE,
-    });
-  } else if (!val.personaId && !val.videoSubject) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['videoSubject'],
-      message: VIDEO_SUBJECT_REQUIRED_MESSAGE,
-    });
-  }
-  if (!val.personaId && !hasExactlyOneVoiceSource(val.audioUrl, val.voiceId)) {
-    const neither = !val.audioUrl && !val.voiceId;
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      // Form-level issue (path []): the combination is wrong, not one field
-      // alone — blaming only voiceId would mislead callers.
-      path: [],
-      message: neither ? FACELESS_VOICE_MESSAGE : FACELESS_VOICE_BOTH_MESSAGE,
-    });
-  }
-  if (val.personaId && val.voiceId) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: PERSONA_VOICE_ID_MESSAGE,
-      path: ['voiceId'],
-    });
+  // Cross-field rules are shared with the direct client
+  // (validateGenerateVideoFields) so the layers can't diverge; the schema
+  // only maps each issue to a zod issue with its path.
+  for (const issue of validateGenerateVideoFields({
+    personaId: val.personaId,
+    audioUrl: val.audioUrl,
+    voiceId: val.voiceId,
+    videoSubject: val.videoSubject,
+  })) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: issue.path, message: issue.message });
   }
 });
 
@@ -181,17 +152,30 @@ export const GetVideoStatusSchema = z.object({
   taskId: z.string().min(1, 'taskId is required'),
 });
 
-export const ScheduleProvidersSchema = z
-  // Trim before the enum check: the direct client also trims provider names,
-  // so ' youtube ' is accepted on both paths. preprocess (not pipe) keeps the
-  // advertised JSON Schema as a plain enum.
-  .array(
-    z.preprocess(
-      (value) => (typeof value === 'string' ? value.trim() : value),
-      z.enum(SCHEDULE_PROVIDER_NAMES)
+export const ScheduleProvidersSchema = z.preprocess(
+  // Trim each entry (like the direct client) and dedupe: the client also
+  // dedupes via new Set, so the contract is explicit here rather than an
+  // implementation coincidence. preprocess (not pipe/transform) keeps the
+  // advertised JSON Schema as a plain enum array.
+  (value) =>
+    Array.isArray(value)
+      ? [...new Set(value.map((item) => (typeof item === 'string' ? item.trim() : item)))]
+      : value,
+  z
+    .array(
+      z.enum(SCHEDULE_PROVIDER_NAMES, {
+        // Same wording as the direct client's unknownProviderMessage, so
+        // both layers report the same message for the same input.
+        errorMap: (issue, ctx) => ({
+          message:
+            issue.code === z.ZodIssueCode.invalid_enum_value
+              ? unknownProviderMessage(ctx.data)
+              : ctx.defaultError,
+        }),
+      })
     )
-  )
-  .min(1, PROVIDERS_REQUIRED_MESSAGE);
+    .min(1, PROVIDERS_REQUIRED_MESSAGE)
+);
 
 /**
  * Account-ID fields, one per provider. `satisfies` keeps the precise field

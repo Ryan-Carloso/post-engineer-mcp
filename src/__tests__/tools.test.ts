@@ -313,6 +313,35 @@ describe('MCP Tool Handlers', () => {
       expect(parsed.providers).toEqual(['youtube']);
     });
 
+    it('reports an unknown provider with the shared message, not zod’s default', () => {
+      // Assert on the issue message directly (not the JSON-stringified
+      // ZodError.message) so no quote-escaping is involved.
+      const result = ScheduleVideoSchema.safeParse({
+        personaId: 'persona-123',
+        providers: ['tiktok'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      });
+      expect(result.success).toBe(false);
+      if (result.success) {
+        return;
+      }
+      expect(result.error.issues).toHaveLength(1);
+      expect(result.error.issues[0]?.message).toBe(
+        'Unknown provider "tiktok". Must be one of: youtube, instagram, linkedin, bluesky'
+      );
+    });
+
+    it('dedupes providers in the schema, matching the direct client', () => {
+      const parsed = ScheduleVideoSchema.parse({
+        personaId: 'persona-123',
+        providers: ['youtube', 'youtube', ' instagram '],
+        youtubeAccountIds: ['yt-1'],
+        instagramAccountIds: ['ig-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      });
+      expect(parsed.providers).toEqual(['youtube', 'instagram']);
+    });
+
     it('reports a non-string field with the shared message, not zod’s default', () => {
       expect(() =>
         GenerateVideoSchema.parse({
