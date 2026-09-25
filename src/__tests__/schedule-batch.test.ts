@@ -66,6 +66,19 @@ describe('ScheduleVideoBatchSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('accepts exactly 30 items (the inclusive max)', () => {
+    const items = Array.from({ length: 30 }, (_, i) => ({ topic: `Topic ${i}` }));
+    expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, items }).success).toBe(true);
+  });
+
+  it('accepts exactly 30 distinct times (the inclusive max)', () => {
+    const times = Array.from({ length: 30 }, (_, i) => {
+      const hour = String(Math.floor(i / 2)).padStart(2, '0');
+      return `${hour}:${i % 2 === 0 ? '00' : '30'}`;
+    });
+    expect(ScheduleVideoBatchSchema.safeParse({ ...validArgs, times }).success).toBe(true);
+  });
+
   it('rejects a non-IANA timezone', () => {
     const result = ScheduleVideoBatchSchema.safeParse({ ...validArgs, timezone: 'Not/AZone' });
     expect(result.success).toBe(false);
@@ -300,6 +313,36 @@ describe('schedule_video_batch registration', () => {
       expect(fetchMock).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('trims personaId and topics at the MCP boundary before reaching the backend', async () => {
+    // The .trim() transforms in schemas.ts run in the SDK's arg parsing;
+    // the handler (and the backend payload) must see the trimmed values.
+    const scheduleVideoBatch = vi.fn().mockResolvedValue({ success: true, scheduleId: 'sched-1' });
+    const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+    const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
+    const server = createPostEngineerMcpServer({ scheduleVideoBatch } as never);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const result = await client.callTool({
+        name: 'schedule_video_batch',
+        arguments: {
+          ...validArgs,
+          personaId: '  persona-123  ',
+          items: [{ topic: '  Topic one  ' }, { topic: 'Topic two' }],
+        },
+      });
+      expect(result.isError).not.toBe(true);
+      expect(scheduleVideoBatch).toHaveBeenCalledTimes(1);
+      const [input] = scheduleVideoBatch.mock.calls[0] as [Record<string, unknown>];
+      expect(input.personaId).toBe('persona-123');
+      expect(input.items).toEqual([{ topic: 'Topic one' }, { topic: 'Topic two' }]);
+    } finally {
       await client.close();
       await server.close();
     }
