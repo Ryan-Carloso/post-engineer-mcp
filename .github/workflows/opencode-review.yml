@@ -50,7 +50,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - name: Checkout PR head
+      - name: Checkout trusted base (pull_request_target never checks out the PR head)
         uses: actions/checkout@v6
         with:
           persist-credentials: false
