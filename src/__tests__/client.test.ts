@@ -458,6 +458,42 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('rejects a blank personaId instead of treating it as faceless', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.generateVideoJob({ personaId: '   ', audioUrl: 'https://cdn.example.com/a.mp3' })
+    ).rejects.toThrow(/personaId is required/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('treats a blank voiceId as not provided', async () => {
+    global.fetch = vi.fn();
+    await expect(
+      client.generateVideoJob({ voiceId: '   ' })
+    ).rejects.toThrow(/exactly one of audioUrl or voiceId/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('trims whitespace around the voice sources before validating', async () => {
+    const mockJob = { success: true, taskId: 'task-trim-1' };
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockJob,
+    });
+
+    const result = await client.generateVideoJob({
+      audioUrl: '  https://cdn.example.com/a.mp3  ',
+      voiceId: '   ',
+    });
+
+    const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
+    const payload = JSON.parse(fetchBody.body);
+    expect(payload.audio_url).toBe('https://cdn.example.com/a.mp3');
+    expect(payload).not.toHaveProperty('voice_id');
+    expect(result).toEqual(mockJob);
+  });
+
   it('retrieves video task status', async () => {
     const mockStatus = {
       success: true,

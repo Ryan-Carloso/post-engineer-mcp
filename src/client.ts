@@ -293,14 +293,23 @@ export class PostEngineerClient {
   async generateVideoJob(input: GenerateVideoJobInput): Promise<unknown> {
     // Fail fast for direct (non-MCP) callers, mirroring the MCP schema rules:
     // faceless generation needs exactly one voice source, and voiceId is
-    // rejected alongside personaId. The server rejects invalid combinations.
-    if (!input.personaId && !hasExactlyOneVoiceSource(input.audioUrl, input.voiceId)) {
+    // rejected alongside personaId. Blank strings are invalid input, not
+    // absent values: a blank personaId is rejected (not treated as faceless),
+    // and blank voice sources count as not provided. The server rejects
+    // invalid combinations.
+    if (input.personaId !== undefined && input.personaId.trim() === '') {
+      throw new Error('personaId is required');
+    }
+    const personaId = input.personaId?.trim() || undefined;
+    const audioUrl = input.audioUrl?.trim() || undefined;
+    const voiceId = input.voiceId?.trim() || undefined;
+    if (!personaId && !hasExactlyOneVoiceSource(audioUrl, voiceId)) {
       throw new Error(FACELESS_VOICE_MESSAGE);
     }
-    if (input.personaId && input.voiceId) {
+    if (personaId && voiceId) {
       throw new Error(PERSONA_VOICE_ID_MESSAGE);
     }
-    if (input.audioUrl && !isValidHttpUrl(input.audioUrl)) {
+    if (audioUrl && !isValidHttpUrl(audioUrl)) {
       throw new Error('audioUrl must be an http(s) URL');
     }
     const url = `${this.baseUrl}/api/persona/video-job`;
@@ -308,11 +317,11 @@ export class PostEngineerClient {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({
-        personaId: input.personaId,
+        personaId,
         video_script_prompt: input.scriptPrompt,
-        audio_url: input.audioUrl,
+        audio_url: audioUrl,
         // Guarded above: voiceId is only present for faceless generation.
-        voice_id: input.voiceId,
+        voice_id: voiceId,
       }),
     });
 
@@ -357,14 +366,14 @@ export class PostEngineerClient {
     }
 
     const url = `${this.baseUrl}/api/schedule`;
-    // Account-ID fields follow the `${provider}AccountIds` convention and are
-    // derived from the shared provider list so a new provider cannot be
-    // silently dropped from the payload.
+    // Account-ID fields are derived from the shared provider list via the
+    // shared field-name helper so a new provider cannot be silently dropped
+    // from the payload.
     const accountIds = Object.fromEntries(
-      SCHEDULE_PROVIDER_NAMES.map((provider) => [
-        `${provider}AccountIds`,
-        input[`${provider}AccountIds`] ?? [],
-      ])
+      SCHEDULE_PROVIDER_NAMES.map((provider) => {
+        const field = providerAccountIdsField(provider);
+        return [field, input[field] ?? []];
+      })
     );
     const response = await fetch(url, {
       method: 'POST',
