@@ -210,7 +210,7 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
 
   server.tool(
     'schedule_video_batch',
-    `Schedule a finite manual batch of videos (1-${MAX_BATCH_ITEMS}). Each items entry becomes exactly one video with its own topic. Every provider must already have at least one connected account (see list_social_accounts / connect_account); the batch targets all connected accounts of each provider. Tokens are charged upfront for the whole batch (insufficient balance returns an INSUFFICIENT error and nothing is created); videos generate at the 06:00 UTC cutoff. The batch has exactly items.length slots: the next chronological occurrences of \`times\` in \`timezone\` (times repeat once exhausted).`,
+    `Schedule a finite manual batch of videos (1-${MAX_BATCH_ITEMS}). Each items entry becomes exactly one video with its own topic. Every provider must already have at least one connected account (see list_social_accounts / connect_account); the batch targets all connected accounts of each provider. Tokens are charged upfront for the whole batch (insufficient balance returns an INSUFFICIENT error and nothing is created); videos generate at the 06:00 UTC cutoff. The batch has exactly items.length slots: the next chronological occurrences of \`times\` in \`timezone\` (times repeat once exhausted). Do not blindly retry a timed-out request — the backend may already have charged and created the batch, so check list_schedules first.`,
     scheduleVideoBatchParams,
     async (args) => {
       return handleScheduleVideoBatch(apiClient, args);

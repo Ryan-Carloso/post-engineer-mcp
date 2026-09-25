@@ -206,7 +206,7 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     );
 
     const client = new PostEngineerClient({ apiKey: 'key' });
-    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/missing the scheduleId/);
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/unexpected shape/);
   });
 
   it('throws a clean error when the 200 body is JSON null', async () => {
@@ -219,7 +219,35 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     );
 
     const client = new PostEngineerClient({ apiKey: 'key' });
-    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/missing the scheduleId/);
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/unexpected shape/);
+  });
+
+  it('throws when slots is garbled', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, scheduleId: 'sched-1', tokensSpent: 4, slots: 'nope' }),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/unexpected shape.*slots/);
+  });
+
+  it('throws when tokensSpent is not a number', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, scheduleId: 'sched-1', tokensSpent: 'four', slots: [] }),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/unexpected shape.*tokensSpent/);
   });
 
   it('uses the code when success: false has a code but no error', async () => {

@@ -1,6 +1,7 @@
 import { validateScheduleAdvance } from './validator.js';
 import type { z } from 'zod';
 import type { ScheduleVideoBatchSchema } from './schemas.js';
+import { ScheduleVideoBatchResponseSchema } from './schemas.js';
 
 export interface PostEngineerClientOptions {
   apiKey?: string;
@@ -383,10 +384,15 @@ export class PostEngineerClient {
       throw new Error(`Failed to schedule video batch: ${detail}${code}`);
     }
 
-    if (body === null || typeof body.scheduleId !== 'string' || body.scheduleId.length === 0) {
-      throw new Error('Failed to schedule video batch: response was missing the scheduleId');
+    const parsed = ScheduleVideoBatchResponseSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new Error(
+        `Failed to schedule video batch: response had an unexpected shape (${parsed.error.issues
+          .map((issue) => issue.path.join('.') || '(root)')
+          .join(', ')})`,
+      );
     }
 
-    return body;
+    return parsed.data;
   }
 }
