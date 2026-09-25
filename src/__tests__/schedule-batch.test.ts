@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ScheduleVideoBatchSchema, scheduleVideoBatchParams, handleScheduleVideoBatch } from '../tools.js';
 import { PostEngineerClient } from '../client.js';
 import { createPostEngineerMcpServer } from '../index.js';
@@ -48,6 +48,10 @@ describe('ScheduleVideoBatchSchema', () => {
 describe('PostEngineerClient.scheduleVideoBatch', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('POSTs the batch payload to /api/schedule/batch', async () => {
@@ -130,10 +134,23 @@ describe('handleScheduleVideoBatch', () => {
 });
 
 describe('schedule_video_batch registration', () => {
-  it('is registered on the MCP server', () => {
+  it('is registered on the MCP server', async () => {
+    // Public-protocol check: tools/list round-trip over an in-memory
+    // transport (no SDK private internals).
+    const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+    const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
     const server = createPostEngineerMcpServer();
-    const registered = (server as unknown as { _registeredTools: Record<string, unknown> })._registeredTools;
-    expect(registered['schedule_video_batch']).toBeDefined();
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const { tools } = await client.listTools();
+      const names = tools.map((t) => t.name);
+      expect(names).toContain('schedule_video_batch');
+    } finally {
+      await client.close();
+      await server.close();
+    }
   });
 
   it('registers the strict shared schema (rejects what the old loose schema allowed)', () => {
