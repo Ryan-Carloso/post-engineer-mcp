@@ -250,6 +250,25 @@ describe('PostEngineerClient.scheduleVideoBatch', () => {
     await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/unexpected shape.*tokensSpent/);
   });
 
+  it('throws when a slot is missing its topic', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            scheduleId: 'sched-1',
+            tokensSpent: 4,
+            slots: [{ slotAt: '2026-09-26T08:00:00.000Z' }],
+          }),
+      }),
+    );
+
+    const client = new PostEngineerClient({ apiKey: 'key' });
+    await expect(client.scheduleVideoBatch(validArgs)).rejects.toThrow(/unexpected shape.*slots/);
+  });
+
   it('uses the code when success: false has a code but no error', async () => {
     vi.stubGlobal(
       'fetch',

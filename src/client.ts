@@ -368,19 +368,28 @@ export class PostEngineerClient {
       throw new Error(`Failed to schedule video batch: ${response.status} ${errorText}`);
     }
 
-    let body: { success?: unknown; error?: unknown; code?: unknown; scheduleId?: unknown };
+    let body: unknown;
     try {
-      body = (await response.json()) as typeof body;
+      body = await response.json();
     } catch (err) {
       throw new Error(
-        `Failed to schedule video batch: could not parse the response body as JSON (${err instanceof Error ? err.message : String(err)})`,
+        `Failed to schedule video batch: could not parse the response body as JSON (${err instanceof Error ? err.message : String(err)}); the batch may still have been created — check list_schedules before retrying`,
       );
     }
 
-    if (body !== null && typeof body === 'object' && body.success === false) {
+    if (
+      body !== null &&
+      typeof body === 'object' &&
+      !Array.isArray(body) &&
+      (body as { success?: unknown }).success === false
+    ) {
+      const envelope = body as { error?: unknown; code?: unknown };
       const detail =
-        typeof body.error === 'string' && body.error.length > 0 ? body.error : 'batch rejected';
-      const code = typeof body.code === 'string' && body.code.length > 0 ? ` (${body.code})` : '';
+        typeof envelope.error === 'string' && envelope.error.length > 0
+          ? envelope.error
+          : 'batch rejected';
+      const code =
+        typeof envelope.code === 'string' && envelope.code.length > 0 ? ` (${envelope.code})` : '';
       throw new Error(`Failed to schedule video batch: ${detail}${code}`);
     }
 
@@ -389,7 +398,7 @@ export class PostEngineerClient {
       throw new Error(
         `Failed to schedule video batch: response had an unexpected shape (${parsed.error.issues
           .map((issue) => issue.path.join('.') || '(root)')
-          .join(', ')})`,
+          .join(', ')}); the batch may still have been created — check list_schedules before retrying`,
       );
     }
 
