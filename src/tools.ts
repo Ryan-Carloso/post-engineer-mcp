@@ -55,38 +55,38 @@ export const CancelScheduleSchema = z.object({
 
 export const GetTokenBalanceSchema = z.object({});
 
-export const GenerateVideoSchema = z
-  .object({
-    personaId: z.string().min(1, 'personaId is required').optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
-    scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
-    audioUrl: z
-      .string()
-      .url('audioUrl must be a valid URL')
-      .optional()
-      .describe('Public URL of custom audio for this video. With a persona it overrides the persona voice; for faceless generation provide exactly one of audioUrl or voiceId.'),
-    voiceId: z
-      .string()
-      .min(1)
-      .optional()
-      .describe('Voice ID for this video (see list_voices). Only used for faceless generation (ignored when personaId is provided); for faceless generation provide exactly one of audioUrl or voiceId.'),
-  })
-  .superRefine((val, ctx) => {
-    if (!val.personaId && !val.audioUrl && !val.voiceId) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Faceless generation requires audioUrl or voiceId (or provide personaId)',
-        path: ['personaId'],
-      });
-      return;
-    }
-    if (!val.personaId && val.audioUrl && val.voiceId) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Faceless generation needs exactly one of audioUrl or voiceId, not both',
-        path: ['voiceId'],
-      });
-    }
-  });
+export const GenerateVideoObject = z.object({
+  personaId: z.string().min(1, 'personaId is required').optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
+  scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
+  audioUrl: z
+    .string()
+    .url('audioUrl must be a valid URL')
+    .optional()
+    .describe('Public URL of custom audio for this video. With a persona it overrides the persona voice; for faceless generation provide exactly one of audioUrl or voiceId.'),
+  voiceId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Voice ID for this video (see list_voices). Only used for faceless generation (ignored when personaId is provided); for faceless generation provide exactly one of audioUrl or voiceId.'),
+});
+
+export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) => {
+  if (!val.personaId && !val.audioUrl && !val.voiceId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Faceless generation requires audioUrl or voiceId (or provide personaId)',
+      path: ['personaId'],
+    });
+    return;
+  }
+  if (!val.personaId && val.audioUrl && val.voiceId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Faceless generation needs exactly one of audioUrl or voiceId, not both',
+      path: ['voiceId'],
+    });
+  }
+});
 
 export const GetVideoStatusSchema = z.object({
   taskId: z.string().min(1, 'taskId is required'),
@@ -103,33 +103,33 @@ const SCHEDULE_ACCOUNT_IDS_FIELDS = {
   bluesky: 'blueskyAccountIds',
 } as const;
 
-export const ScheduleVideoSchema = z
-  .object({
-    personaId: z.string().min(1, 'personaId is required'),
-    providers: ScheduleProvidersSchema.describe('Target social platforms'),
-    youtubeAccountIds: z.array(z.string()).optional().default([]),
-    instagramAccountIds: z.array(z.string()).optional().default([]),
-    linkedinAccountIds: z.array(z.string()).optional().default([]),
-    blueskyAccountIds: z.array(z.string()).optional().default([]),
-    scheduledAt: z.string().describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
-    daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
-    startHour: z.number().int().min(0).max(23).optional(),
-    endHour: z.number().int().min(0).max(23).optional(),
-    postsPerDay: z.number().int().min(1).max(10).optional(),
-    timezone: z.string().optional().default('UTC'),
-  })
-  .superRefine((val, ctx) => {
-    for (const provider of val.providers) {
-      const field = SCHEDULE_ACCOUNT_IDS_FIELDS[provider];
-      if (val[field].length === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `providers includes '${provider}' but ${field} is empty`,
-          path: [field],
-        });
-      }
+export const ScheduleVideoObject = z.object({
+  personaId: z.string().min(1, 'personaId is required'),
+  providers: ScheduleProvidersSchema.describe('Target social platforms'),
+  youtubeAccountIds: z.array(z.string()).optional().default([]),
+  instagramAccountIds: z.array(z.string()).optional().default([]),
+  linkedinAccountIds: z.array(z.string()).optional().default([]),
+  blueskyAccountIds: z.array(z.string()).optional().default([]),
+  scheduledAt: z.string().describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
+  daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
+  startHour: z.number().int().min(0).max(23).optional(),
+  endHour: z.number().int().min(0).max(23).optional(),
+  postsPerDay: z.number().int().min(1).max(10).optional(),
+  timezone: z.string().optional().default('UTC'),
+});
+
+export const ScheduleVideoSchema = ScheduleVideoObject.superRefine((val, ctx) => {
+  for (const provider of val.providers) {
+    const field = SCHEDULE_ACCOUNT_IDS_FIELDS[provider];
+    if (val[field].length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `providers includes '${provider}' but ${field} is empty`,
+        path: [field],
+      });
     }
-  });
+  }
+});
 
 export async function handleCreatePersona(
   client: PostEngineerClient,

@@ -18,7 +18,8 @@ import {
   handleGenerateVideo,
   handleGetVideoStatus,
   handleScheduleVideo,
-  ScheduleProvidersSchema,
+  GenerateVideoObject,
+  ScheduleVideoObject,
 } from './tools.js';
 import { startHttpServer } from './http.js';
 
@@ -160,12 +161,10 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
   server.tool(
     'generate_video_from_persona',
     'Trigger video generation using an existing persona, or faceless (omit personaId). Faceless: optional scriptPrompt plus exactly one of audioUrl (public http(s) URL) or voiceId (see list_voices) supplies the voice. With a persona: optional scriptPrompt overrides the video script; optional audioUrl supplies custom audio, overriding the persona voice (voiceId is ignored).',
-    {
-      personaId: z.string().min(1, 'personaId is required').optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
-      scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
-      audioUrl: z.string().url('audioUrl must be a valid URL').optional().describe('Public URL of custom audio for this video. With a persona it overrides the persona voice; for faceless generation provide exactly one of audioUrl or voiceId.'),
-      voiceId: z.string().min(1).optional().describe('Voice ID for this video (see list_voices). Only used for faceless generation (ignored when personaId is provided); for faceless generation provide exactly one of audioUrl or voiceId.'),
-    },
+    // Base object shape: the cross-field rules live on GenerateVideoSchema
+    // (superRefine) and are enforced in handleGenerateVideo, since the SDK
+    // only accepts raw shapes here.
+    GenerateVideoObject.shape,
     async (args) => {
       return handleGenerateVideo(apiClient, args);
     }
@@ -185,22 +184,10 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
   server.tool(
     'schedule_video',
     'Schedule automated video generation and posting to social channels. IMPORTANT: Schedules must be between 24h and 30 days in advance. Each provider requires at least one account ID — discover them with list_social_accounts first.',
-    {
-      personaId: z.string().min(1, 'personaId is required').describe('The ID of the persona'),
-      providers: ScheduleProvidersSchema.describe('Target social platforms'),
-      youtubeAccountIds: z.array(z.string()).optional().default([]),
-      instagramAccountIds: z.array(z.string()).optional().default([]),
-      linkedinAccountIds: z.array(z.string()).optional().default([]),
-      blueskyAccountIds: z.array(z.string()).optional().default([]),
-      scheduledAt: z
-        .string()
-        .describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
-      daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
-      startHour: z.number().int().min(0).max(23).optional(),
-      endHour: z.number().int().min(0).max(23).optional(),
-      postsPerDay: z.number().int().min(1).max(10).optional(),
-      timezone: z.string().optional().default('UTC'),
-    },
+    // Base object shape: the per-provider account rule lives on
+    // ScheduleVideoSchema (superRefine) and is enforced in
+    // handleScheduleVideo, since the SDK only accepts raw shapes here.
+    ScheduleVideoObject.shape,
     async (args) => {
       return handleScheduleVideo(apiClient, args);
     }
