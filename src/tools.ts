@@ -73,7 +73,9 @@ function parseArgsOrError<Input, Output>(
         content: [
           {
             type: 'text',
-            text: `Invalid arguments: ${parsed.error.issues.map((i) => i.message).join('; ')}`,
+            text: `Invalid arguments: ${parsed.error.issues
+              .map((i) => [i.path.join('.'), i.message].filter(Boolean).join(': '))
+              .join('; ')}`,
           },
         ],
         isError: true,
@@ -134,10 +136,10 @@ const SCHEDULE_ACCOUNT_IDS_FIELDS = {
 export const ScheduleVideoObject = z.object({
   personaId: z.string().min(1, 'personaId is required'),
   providers: ScheduleProvidersSchema.describe('Target social platforms'),
-  youtubeAccountIds: z.array(z.string()).optional().default([]),
-  instagramAccountIds: z.array(z.string()).optional().default([]),
-  linkedinAccountIds: z.array(z.string()).optional().default([]),
-  blueskyAccountIds: z.array(z.string()).optional().default([]),
+  youtubeAccountIds: z.array(z.string().min(1)).optional().default([]),
+  instagramAccountIds: z.array(z.string().min(1)).optional().default([]),
+  linkedinAccountIds: z.array(z.string().min(1)).optional().default([]),
+  blueskyAccountIds: z.array(z.string().min(1)).optional().default([]),
   scheduledAt: z.string().describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
   daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
   startHour: z.number().int().min(0).max(23).optional(),

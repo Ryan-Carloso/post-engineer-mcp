@@ -229,6 +229,17 @@ describe('MCP Tool Handlers', () => {
       });
       expect(parsed.providers).toEqual(['youtube', 'bluesky']);
     });
+
+    it('rejects blank-string account IDs', () => {
+      expect(() =>
+        ScheduleVideoSchema.parse({
+          personaId: 'persona-123',
+          providers: ['bluesky'],
+          blueskyAccountIds: [''],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+        })
+      ).toThrow();
+    });
   });
 
   it('handleListVoices returns the voice catalog', async () => {
