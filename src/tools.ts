@@ -59,8 +59,10 @@ type ParsedArgs<T> = { data: T; error?: undefined } | { data?: undefined; error:
 
 /**
  * Enforce a schema's cross-field rules (superRefine) and convert failures
- * into an MCP error response. The SDK only validates the raw shape at the
- * tool boundary, so handlers are the enforcement point for every transport.
+ * into an MCP error response. The SDK validates only the raw shape at the
+ * tool boundary, which is the whole schema for plain z.object tools — but
+ * for tools whose schemas carry cross-field rules, the handlers are the
+ * enforcement point for every transport (stdio and HTTP).
  */
 function parseArgsOrError<Input, Output>(
   schema: z.ZodType<Output, z.ZodTypeDef, Input>,
@@ -91,6 +93,9 @@ function parseArgsOrError<Input, Output>(
  */
 export const FACELESS_VOICE_RULE = 'exactly one of audioUrl or voiceId';
 
+/** Full message for the faceless voice-source rule, shared with the client's fail-fast guard. */
+export const FACELESS_VOICE_MESSAGE = `Faceless generation requires ${FACELESS_VOICE_RULE} (or provide personaId)`;
+
 export const GenerateVideoObject = z.object({
   personaId: z.string().min(1, 'personaId is required').optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
   scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
@@ -115,7 +120,7 @@ export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) =>
   if (!val.personaId && !val.audioUrl && !val.voiceId) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: `Faceless generation requires ${FACELESS_VOICE_RULE} (or provide personaId)`,
+      message: FACELESS_VOICE_MESSAGE,
       path: [],
     });
     return;
@@ -152,13 +157,6 @@ export const ScheduleProvidersSchema = z
   .array(z.enum(SCHEDULE_PROVIDER_NAMES))
   .min(1, 'At least one provider required');
 
-const SCHEDULE_ACCOUNT_IDS_FIELDS: Record<ScheduleProvider, `${ScheduleProvider}AccountIds`> = {
-  youtube: 'youtubeAccountIds',
-  instagram: 'instagramAccountIds',
-  linkedin: 'linkedinAccountIds',
-  bluesky: 'blueskyAccountIds',
-};
-
 export const ScheduleVideoObject = z.object({
   personaId: z.string().min(1, 'personaId is required'),
   providers: ScheduleProvidersSchema.describe('Target social platforms'),
@@ -176,7 +174,9 @@ export const ScheduleVideoObject = z.object({
 
 export const ScheduleVideoSchema = ScheduleVideoObject.superRefine((val, ctx) => {
   for (const provider of new Set(val.providers)) {
-    const field = SCHEDULE_ACCOUNT_IDS_FIELDS[provider];
+    // Field names follow the `${provider}AccountIds` convention, so they are
+    // derived directly instead of maintained in a separate map.
+    const field = `${provider}AccountIds` as const;
     if (val[field].length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

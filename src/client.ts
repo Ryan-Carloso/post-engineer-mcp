@@ -1,5 +1,6 @@
 import { validateScheduleAdvance } from './validator.js';
 import type { ScheduleProvider } from './tools.js';
+import { FACELESS_VOICE_MESSAGE, SCHEDULE_PROVIDER_NAMES } from './tools.js';
 
 export interface PostEngineerClientOptions {
   apiKey?: string;
@@ -290,9 +291,7 @@ export class PostEngineerClient {
     // Fail fast for direct (non-MCP) callers: the server requires exactly one
     // voice source for faceless generation and rejects anything else.
     if (!input.personaId && Boolean(input.audioUrl) === Boolean(input.voiceId)) {
-      throw new Error(
-        'Faceless generation requires exactly one of audioUrl or voiceId (or provide personaId)'
-      );
+      throw new Error(FACELESS_VOICE_MESSAGE);
     }
     const url = `${this.baseUrl}/api/persona/video-job`;
     const response = await fetch(url, {
@@ -340,16 +339,22 @@ export class PostEngineerClient {
     }
 
     const url = `${this.baseUrl}/api/schedule`;
+    // Account-ID fields follow the `${provider}AccountIds` convention and are
+    // derived from the shared provider list so a new provider cannot be
+    // silently dropped from the payload.
+    const accountIds = Object.fromEntries(
+      SCHEDULE_PROVIDER_NAMES.map((provider) => [
+        `${provider}AccountIds`,
+        input[`${provider}AccountIds`] ?? [],
+      ])
+    );
     const response = await fetch(url, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({
         personaId: input.personaId,
         providers: input.providers,
-        youtubeAccountIds: input.youtubeAccountIds ?? [],
-        instagramAccountIds: input.instagramAccountIds ?? [],
-        linkedinAccountIds: input.linkedinAccountIds ?? [],
-        blueskyAccountIds: input.blueskyAccountIds ?? [],
+        ...accountIds,
         scheduledAt: input.scheduledAt,
         daysOfWeek: input.daysOfWeek,
         startHour: input.startHour,
