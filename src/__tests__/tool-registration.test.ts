@@ -62,4 +62,25 @@ describe('tool registration', () => {
       ])
     );
   });
+
+  it('advertises list_social_accounts with brand-correct provider display names', async () => {
+    const tools = await listAdvertisedTools();
+    const tool = tools.find((t) => t.name === 'list_social_accounts');
+    expect(tool).toBeDefined();
+    // providerDisplayName pins brand casing (YouTube, not Youtube); the
+    // description is derived from SCHEDULE_PROVIDER_NAMES so it can't drift.
+    expect(tool?.description).toContain('YouTube');
+    expect(tool?.description).toContain('LinkedIn');
+    expect(tool?.description).not.toContain('Youtube');
+  });
+
+  it('advertises connect_account with provider names derived from SCHEDULE_PROVIDER_NAMES', async () => {
+    const tools = await listAdvertisedTools();
+    const tool = tools.find((t) => t.name === 'connect_account');
+    expect(tool).toBeDefined();
+    // The description interpolates SCHEDULE_PROVIDER_NAMES (not a hardcoded
+    // list) so adding a provider can't silently drift the text.
+    expect(tool?.description).toContain('YouTube/Instagram/LinkedIn');
+    expect(tool?.description).toContain('Bluesky');
+  });
 });
