@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PostEngineerClient } from '../client.js';
+import { PostEngineerClient, normalizeScheduleInput, ValidationError } from '../client.js';
 import type { GenerateVideoJobInput, CreateScheduleInput } from '../client.js';
 
 describe('PostEngineerClient', () => {
@@ -1295,5 +1295,105 @@ describe('PostEngineerClient', () => {
     await expect(
       client.connectBlueskyAccount('user.bsky.social', 'wrong')
     ).rejects.toThrow(/Failed to connect Bluesky account: 400/);
+  });
+});
+
+describe('normalizeScheduleInput', () => {
+  const baseInput: CreateScheduleInput = {
+    personaId: 'persona-123',
+    providers: ['youtube'],
+    youtubeAccountIds: ['yt-1'],
+    scheduledAt: '2026-10-01T10:00:00.000Z',
+  };
+
+  it('trims and normalizes a valid input', () => {
+    const normalized = normalizeScheduleInput({
+      ...baseInput,
+      personaId: '  persona-123  ',
+      providers: [' youtube '],
+      youtubeAccountIds: ['  yt-1  '],
+      timezone: ' America/Sao_Paulo ',
+    });
+    expect(normalized.personaId).toBe('persona-123');
+    expect(normalized.providers).toEqual(['youtube']);
+    expect(normalized.accountIds.youtubeAccountIds).toEqual(['yt-1']);
+    expect(normalized.timezone).toBe('America/Sao_Paulo');
+  });
+
+  it('initializes every provider account-ID field, even for undeclared providers', () => {
+    const normalized = normalizeScheduleInput(baseInput);
+    expect(normalized.accountIds).toEqual({
+      youtubeAccountIds: ['yt-1'],
+      instagramAccountIds: [],
+      linkedinAccountIds: [],
+      blueskyAccountIds: [],
+    });
+  });
+
+  it('throws the field-ordered errors without a network call', () => {
+    // Blank personaId fails before providers are even checked.
+    expect(() => normalizeScheduleInput({ ...baseInput, personaId: '  ' })).toThrow(
+      /personaId is required/i
+    );
+    // Non-array providers get the type message.
+    expect(() =>
+      normalizeScheduleInput({ ...baseInput, providers: 'youtube' as unknown as string[] })
+    ).toThrow(/providers must be an array/i);
+    // Omitted scheduledAt gets the required message.
+    const { scheduledAt: _omit, ...rest } = baseInput;
+    expect(() => normalizeScheduleInput(rest)).toThrow(/scheduledAt is required/i);
+  });
+});
+
+describe('ValidationError', () => {
+  let client: PostEngineerClient;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    client = new PostEngineerClient({ apiKey: 'test-token-123' });
+  });
+
+  it('throws ValidationError (not plain Error) for input validation failures', async () => {
+    global.fetch = vi.fn();
+    const error = await client
+      .generateVideoJob({ audioUrl: 'not-a-url' })
+      .catch((e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(ValidationError);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe('ValidationError');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('throws ValidationError for schedule validation failures', async () => {
+    global.fetch = vi.fn();
+    const error = await client
+      .createSchedule({
+        personaId: 'persona-123',
+        providers: [],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      })
+      .catch((e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(ValidationError);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps network failures as plain Error, distinguishable from validation', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: async () => 'boom',
+    });
+    const error = await client
+      .createSchedule({
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: '2026-09-15T10:00:00.000Z',
+        _nowForTesting: new Date('2026-09-01T00:00:00.000Z'),
+      })
+      .catch((e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(ValidationError);
+    expect(error.message).toMatch(/Failed to create schedule: 500/);
   });
 });

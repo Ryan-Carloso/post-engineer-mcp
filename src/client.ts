@@ -48,6 +48,8 @@ export interface CreatePersonaInput {
  * Input for generating a video job. Omit personaId for faceless generation,
  * which requires exactly one of audioUrl or voiceId (never both); the server
  * rejects invalid combinations. voiceId is rejected when personaId is provided.
+ * Normalization is asymmetric: a blank scriptPrompt is silently dropped (sent
+ * as undefined), while a blank audioUrl, voiceId, or videoSubject throws.
  */
 export interface GenerateVideoJobInput {
   personaId?: string;
@@ -82,6 +84,175 @@ export interface CreateScheduleInput extends Partial<Record<ProviderAccountIdsFi
 }
 
 const PRODUCTION_API_URL = 'https://post-engineer.com';
+
+/**
+ * Error thrown for client-side input validation failures (as opposed to
+ * network/HTTP failures, which remain plain Errors with a "Failed to..."
+ * message). Lets SDK callers distinguish a bad input — which retrying
+ * won't fix — from a transient transport failure. Extends Error, so
+ * existing `catch (e)` and `instanceof Error` handling keeps working.
+ */
+export class ValidationError extends Error {
+  constructor(message?: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
+/**
+ * Normalized schedule input: every field validated and trimmed, ready for
+ * the cross-field checks and the request payload. Produced by
+ * normalizeScheduleInput so the normalization is independently testable.
+ */
+export interface NormalizedScheduleInput {
+  personaId: string;
+  providers: ScheduleProvider[];
+  accountIds: Record<ProviderAccountIdsField, string[]>;
+  scheduledAt: string | Date;
+  timezone?: string;
+  daysOfWeek?: number[];
+  startHour?: number;
+  endHour?: number;
+  postsPerDay?: number;
+}
+
+/**
+ * Validate and normalize a CreateScheduleInput, throwing the same errors
+ * the schema reports on the MCP path. Field checks follow the schema's
+ * field order (personaId, providers, account-IDs, scheduledAt, window,
+ * timezone) so both layers report the same first error for the same input.
+ */
+export function normalizeScheduleInput(input: CreateScheduleInput): NormalizedScheduleInput {
+  // Mirror generateVideoJob's hardening: a blank or non-string personaId
+  // fails fast here instead of server-side. Presence and type get
+  // separate messages — a supplied-but-wrong-typed value is not
+  // "missing" — matching the schema's invalid_type_error vs min(1).
+  if (typeof input.personaId !== 'string') {
+    throw new ValidationError(stringFieldMessage('personaId'));
+  }
+  if (input.personaId.trim() === '') {
+    throw new ValidationError(PERSONA_ID_REQUIRED_MESSAGE);
+  }
+  const personaId = input.personaId.trim();
+
+  // The shape checks below are untyped-JS-caller hardening that zod handles
+  // on the MCP path: a non-array is a type error (same message as the
+  // schema's invalid_type_error), an empty array is "none given".
+  if (!Array.isArray(input.providers)) {
+    throw new ValidationError(PROVIDERS_TYPE_MESSAGE);
+  }
+  if (input.providers.length === 0) {
+    throw new ValidationError(PROVIDERS_REQUIRED_MESSAGE);
+  }
+  // Trim provider names before the membership check: ' youtube ' is
+  // accepted, consistent with the whitespace tolerance elsewhere.
+  const providers: ScheduleProvider[] = [];
+  for (const raw of input.providers) {
+    const provider = typeof raw === 'string' ? raw.trim() : raw;
+    if (!isScheduleProvider(provider)) {
+      throw new ValidationError(unknownProviderMessage(provider));
+    }
+    providers.push(provider);
+  }
+  // Validate and normalize the account-ID fields in a single pass,
+  // mirroring the schema's array(z.string().trim().min(1)): a non-array
+  // field gets an accurate type error instead of a misleading "is
+  // empty", blank elements are rejected, and the trimmed arrays below
+  // are reused by validateScheduleFields and the payload builder — the
+  // schema likewise validates the trimmed values. The `as` cast is
+  // sound: the loop assigns every SCHEDULE_PROVIDER_NAMES-derived field.
+  const accountIds = {} as Record<ProviderAccountIdsField, string[]>;
+  for (const provider of SCHEDULE_PROVIDER_NAMES) {
+    const field = providerAccountIdsField(provider);
+    const ids = input[field];
+    if (ids !== undefined && !Array.isArray(ids)) {
+      throw new ValidationError(accountIdFieldTypeMessage(field));
+    }
+    const trimmed: string[] = [];
+    if (Array.isArray(ids)) {
+      for (const id of ids) {
+        if (typeof id !== 'string' || id.trim() === '') {
+          throw new ValidationError(accountIdElementMessage(field));
+        }
+        trimmed.push(id.trim());
+      }
+    }
+    accountIds[field] = trimmed;
+  }
+  // scheduledAt is required by the MCP schema (z.string(), no default):
+  // fail fast here instead of failing server-side with an opaque error.
+  // Normalized before validating: new Date() rejects padded ISO strings,
+  // so trim first and validate/send the trimmed value. Presence and type
+  // get separate messages — a supplied-but-wrong-typed value is not
+  // "missing".
+  const scheduledAt =
+    typeof input.scheduledAt === 'string' ? input.scheduledAt.trim() : input.scheduledAt;
+  if (scheduledAt === undefined || scheduledAt === '') {
+    throw new ValidationError(SCHEDULED_AT_REQUIRED_MESSAGE);
+  }
+  // null is a supplied-but-wrong-typed value, not a missing one — it gets
+  // the type message, matching the schema's invalid_type_error.
+  if (typeof scheduledAt !== 'string' && !(scheduledAt instanceof Date)) {
+    throw new ValidationError(SCHEDULED_AT_TYPE_MESSAGE);
+  }
+  // Fail-fast guards for the optional schedule-window fields, mirroring
+  // the ScheduleVideoObject zod bounds: untyped JS callers get a clear
+  // error here instead of an opaque server-side rejection. Bounds come
+  // from SCHEDULE_WINDOW_BOUNDS, shared with the schema chains.
+  const assertWindowInteger = (
+    field: 'startHour' | 'endHour' | 'postsPerDay',
+    value: unknown
+  ): void => {
+    if (value === undefined) {
+      return;
+    }
+    const { min, max } =
+      field === 'postsPerDay' ? SCHEDULE_WINDOW_BOUNDS.postsPerDay : SCHEDULE_WINDOW_BOUNDS.hour;
+    // Intentional: a wrong-typed value (e.g. a string) is reported with
+    // the bounds message, not a distinct type message. The zod schema
+    // does the same (invalid_type_error is scheduleWindowMessage), so
+    // both layers stay in agreement; unlike the string fields, these
+    // numeric fields never had a separate type wording.
+    const n = typeof value === 'number' ? value : NaN;
+    if (!Number.isInteger(n) || n < min || n > max) {
+      throw new ValidationError(scheduleWindowMessage(field));
+    }
+  };
+  if (input.daysOfWeek !== undefined) {
+    const { min, max } = SCHEDULE_WINDOW_BOUNDS.dayOfWeek;
+    const validDays =
+      Array.isArray(input.daysOfWeek) &&
+      input.daysOfWeek.every((day) => Number.isInteger(day) && day >= min && day <= max);
+    if (!validDays) {
+      throw new ValidationError(scheduleWindowMessage('daysOfWeek'));
+    }
+  }
+  assertWindowInteger('startHour', input.startHour);
+  assertWindowInteger('endHour', input.endHour);
+  assertWindowInteger('postsPerDay', input.postsPerDay);
+  // Trimmed like every other string field here: a padded value (' UTC ')
+  // is normalized, and an explicit blank is rejected rather than
+  // silently disabling the 'UTC' default.
+  if (input.timezone !== undefined && typeof input.timezone !== 'string') {
+    throw new ValidationError(stringFieldMessage('timezone'));
+  }
+  const timezone = input.timezone?.trim();
+  if (timezone === '') {
+    throw new ValidationError(TIMEZONE_EMPTY_MESSAGE);
+  }
+
+  return {
+    personaId,
+    providers,
+    accountIds,
+    scheduledAt,
+    timezone,
+    daysOfWeek: input.daysOfWeek,
+    startHour: input.startHour,
+    endHour: input.endHour,
+    postsPerDay: input.postsPerDay,
+  };
+}
 
 export class PostEngineerClient {
   private readonly baseUrl: string;
@@ -328,7 +499,7 @@ export class PostEngineerClient {
     };
     for (const [name, value] of Object.entries(rawFields)) {
       if (value !== undefined && typeof value !== 'string') {
-        throw new Error(stringFieldMessage(name));
+        throw new ValidationError(stringFieldMessage(name));
       }
     }
     // Normalize once, then validate the normalized values. Blank stays ''
@@ -344,23 +515,23 @@ export class PostEngineerClient {
     // blank personaId must be rejected, not normalized to undefined —
     // normalizing would silently flip the call to faceless mode.
     if (personaId === '') {
-      throw new Error(PERSONA_ID_REQUIRED_MESSAGE);
+      throw new ValidationError(PERSONA_ID_REQUIRED_MESSAGE);
     }
     // audioUrl before voiceId, matching GenerateVideoObject's field order
     // (personaId, scriptPrompt, audioUrl, voiceId, videoSubject) so both
     // layers report the same first error for the same input.
     if (audioUrl === '') {
-      throw new Error(AUDIO_URL_EMPTY_MESSAGE);
+      throw new ValidationError(AUDIO_URL_EMPTY_MESSAGE);
     }
     if (voiceId === '') {
-      throw new Error(VOICE_ID_EMPTY_MESSAGE);
+      throw new ValidationError(VOICE_ID_EMPTY_MESSAGE);
     }
     // Field-level URL check runs before the cross-field rules, mirroring the
     // schema: its refine runs during object parsing, before superRefine. An
     // input violating both reports the same messages in the same order on
     // both paths.
     if (audioUrl && !isValidHttpUrl(audioUrl)) {
-      throw new Error(AUDIO_URL_INVALID_MESSAGE);
+      throw new ValidationError(AUDIO_URL_INVALID_MESSAGE);
     }
     // Cross-field rules are shared with the MCP schema
     // (validateGenerateVideoFields) so the layers can't diverge; every
@@ -369,7 +540,7 @@ export class PostEngineerClient {
     if (issues.length > 0) {
       // Same formatting as the MCP transport (parseArgsOrError), so both
       // layers report the same text for the same input.
-      throw new Error(formatValidationIssues(issues));
+      throw new ValidationError(formatValidationIssues(issues));
     }
     const url = `${this.baseUrl}/api/persona/video-job`;
     const response = await fetch(url, {
@@ -379,11 +550,11 @@ export class PostEngineerClient {
         personaId,
         // A blank scriptPrompt normalizes to undefined (dropped), not an
         // error: unlike the validated fields above, an empty override is
-        // meaningless rather than invalid. A blank videoSubject already
-        // threw above (validateGenerateVideoFields), so videoSubject here
-        // is a non-empty topic override — the web prefers it over the
-        // persona's default niche — sent intentionally, not by accident;
-        // undefined values are omitted by JSON.stringify.
+        // meaningless rather than invalid. videoSubject is guaranteed
+        // non-empty here because validateGenerateVideoFields throws on a
+        // blank videoSubject for both persona and faceless inputs (see the
+        // VIDEO_SUBJECT_REQUIRED checks above); if that rule ever stops
+        // rejecting blanks, this payload line must gain its own guard.
         video_script_prompt: scriptPrompt === '' ? undefined : scriptPrompt,
         audio_url: audioUrl,
         // Guarded above: voiceId is only present for faceless generation.
@@ -415,130 +586,13 @@ export class PostEngineerClient {
     return response.json();
   }
 
+
   async createSchedule(input: CreateScheduleInput): Promise<unknown> {
     // Same guard as generateVideoJob: fail with a clear message instead of
     // a raw TypeError on the first property access.
     assertInputObject<CreateScheduleInput>(input);
-    // Mirror generateVideoJob's hardening: a blank or non-string personaId
-    // fails fast here instead of server-side. Presence and type get
-    // separate messages — a supplied-but-wrong-typed value is not
-    // "missing" — matching the schema's invalid_type_error vs min(1).
-    if (typeof input.personaId !== 'string') {
-      throw new Error(stringFieldMessage('personaId'));
-    }
-    if (input.personaId.trim() === '') {
-      throw new Error(PERSONA_ID_REQUIRED_MESSAGE);
-    }
-    const personaId = input.personaId.trim();
-
-    // Field checks follow the schema's field order (personaId, providers,
-    // account-IDs, scheduledAt, window, timezone) so both layers report the
-    // same first error for the same input. The shape checks below are
-    // untyped-JS-caller hardening that zod handles on the MCP path: a
-    // non-array is a type error (same message as the schema's
-    // invalid_type_error), an empty array is "none given".
-    if (!Array.isArray(input.providers)) {
-      throw new Error(PROVIDERS_TYPE_MESSAGE);
-    }
-    if (input.providers.length === 0) {
-      throw new Error(PROVIDERS_REQUIRED_MESSAGE);
-    }
-    // Trim provider names before the membership check: ' youtube ' is
-    // accepted, consistent with the whitespace tolerance elsewhere.
-    const providers: ScheduleProvider[] = [];
-    for (const raw of input.providers) {
-      const provider = typeof raw === 'string' ? raw.trim() : raw;
-      if (!isScheduleProvider(provider)) {
-        throw new Error(unknownProviderMessage(provider));
-      }
-      providers.push(provider);
-    }
-    // Validate and normalize the account-ID fields in a single pass,
-    // mirroring the schema's array(z.string().trim().min(1)): a non-array
-    // field gets an accurate type error instead of a misleading "is
-    // empty", blank elements are rejected, and the trimmed arrays below
-    // are reused by validateScheduleFields and the payload builder — the
-    // schema likewise validates the trimmed values. The `as` cast is
-    // sound: the loop assigns every SCHEDULE_PROVIDER_NAMES-derived field.
-    const accountIds = {} as Record<ProviderAccountIdsField, string[]>;
-    for (const provider of SCHEDULE_PROVIDER_NAMES) {
-      const field = providerAccountIdsField(provider);
-      const ids = input[field];
-      if (ids !== undefined && !Array.isArray(ids)) {
-        throw new Error(accountIdFieldTypeMessage(field));
-      }
-      const trimmed: string[] = [];
-      if (Array.isArray(ids)) {
-        for (const id of ids) {
-          if (typeof id !== 'string' || id.trim() === '') {
-            throw new Error(accountIdElementMessage(field));
-          }
-          trimmed.push(id.trim());
-        }
-      }
-      accountIds[field] = trimmed;
-    }
-    // scheduledAt is required by the MCP schema (z.string(), no default):
-    // fail fast here instead of failing server-side with an opaque error.
-    // Normalized before validating: new Date() rejects padded ISO strings,
-    // so trim first and validate/send the trimmed value. Presence and type
-    // get separate messages — a supplied-but-wrong-typed value is not
-    // "missing".
-    const scheduledAt =
-      typeof input.scheduledAt === 'string' ? input.scheduledAt.trim() : input.scheduledAt;
-    if (scheduledAt === undefined || scheduledAt === '') {
-      throw new Error(SCHEDULED_AT_REQUIRED_MESSAGE);
-    }
-    // null is a supplied-but-wrong-typed value, not a missing one — it gets
-    // the type message, matching the schema's invalid_type_error.
-    if (typeof scheduledAt !== 'string' && !(scheduledAt instanceof Date)) {
-      throw new Error(SCHEDULED_AT_TYPE_MESSAGE);
-    }
-    // Fail-fast guards for the optional schedule-window fields, mirroring
-    // the ScheduleVideoObject zod bounds: untyped JS callers get a clear
-    // error here instead of an opaque server-side rejection. Bounds come
-    // from SCHEDULE_WINDOW_BOUNDS, shared with the schema chains.
-    const assertWindowInteger = (
-      field: 'startHour' | 'endHour' | 'postsPerDay',
-      value: unknown
-    ): void => {
-      if (value === undefined) {
-        return;
-      }
-      const { min, max } =
-        field === 'postsPerDay' ? SCHEDULE_WINDOW_BOUNDS.postsPerDay : SCHEDULE_WINDOW_BOUNDS.hour;
-      // Intentional: a wrong-typed value (e.g. a string) is reported with
-      // the bounds message, not a distinct type message. The zod schema
-      // does the same (invalid_type_error is scheduleWindowMessage), so
-      // both layers stay in agreement; unlike the string fields, these
-      // numeric fields never had a separate type wording.
-      const n = typeof value === 'number' ? value : NaN;
-      if (!Number.isInteger(n) || n < min || n > max) {
-        throw new Error(scheduleWindowMessage(field));
-      }
-    };
-    if (input.daysOfWeek !== undefined) {
-      const { min, max } = SCHEDULE_WINDOW_BOUNDS.dayOfWeek;
-      const validDays =
-        Array.isArray(input.daysOfWeek) &&
-        input.daysOfWeek.every((day) => Number.isInteger(day) && day >= min && day <= max);
-      if (!validDays) {
-        throw new Error(scheduleWindowMessage('daysOfWeek'));
-      }
-    }
-    assertWindowInteger('startHour', input.startHour);
-    assertWindowInteger('endHour', input.endHour);
-    assertWindowInteger('postsPerDay', input.postsPerDay);
-    // Trimmed like every other string field here: a padded value (' UTC ')
-    // is normalized, and an explicit blank is rejected rather than
-    // silently disabling the 'UTC' default.
-    if (input.timezone !== undefined && typeof input.timezone !== 'string') {
-      throw new Error(stringFieldMessage('timezone'));
-    }
-    const timezone = input.timezone?.trim();
-    if (timezone === '') {
-      throw new Error(TIMEZONE_EMPTY_MESSAGE);
-    }
+    const normalized = normalizeScheduleInput(input);
+    const { personaId, providers, accountIds, scheduledAt, timezone } = normalized;
 
     const missingAccountIds = validateScheduleFields({
       providers,
@@ -548,7 +602,7 @@ export class PostEngineerClient {
       // Report every missing provider at once, like the schema's superRefine,
       // so callers don't fix one error at a time. Same formatting as the MCP
       // transport (parseArgsOrError).
-      throw new Error(formatValidationIssues(missingAccountIds));
+      throw new ValidationError(formatValidationIssues(missingAccountIds));
     }
     // Advance-window check runs after the field and cross-field rules,
     // matching the MCP path where the schema validates first and the
@@ -556,7 +610,7 @@ export class PostEngineerClient {
     // the same first error for the same input.
     const scheduledAtValidation = validateScheduleAdvance(scheduledAt, input._nowForTesting);
     if (!scheduledAtValidation.isValid) {
-      throw new Error(scheduledAtValidation.error);
+      throw new ValidationError(scheduledAtValidation.error);
     }
 
     const url = `${this.baseUrl}/api/schedule`;
@@ -575,10 +629,10 @@ export class PostEngineerClient {
         providers: dedupeProviders(providers),
         ...accountIds,
         scheduledAt,
-        daysOfWeek: input.daysOfWeek,
-        startHour: input.startHour,
-        endHour: input.endHour,
-        postsPerDay: input.postsPerDay,
+        daysOfWeek: normalized.daysOfWeek,
+        startHour: normalized.startHour,
+        endHour: normalized.endHour,
+        postsPerDay: normalized.postsPerDay,
         timezone: timezone ?? 'UTC',
       }),
     });
