@@ -127,14 +127,25 @@ describe('MCP Tool Handlers', () => {
     expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
   });
 
-  it('handleGenerateVideo returns an error for a non-http(s) audioUrl', async () => {
+  it('handleGenerateVideo returns an error for a non-https audioUrl', async () => {
     vi.clearAllMocks();
     const response = await handleGenerateVideo(mockClient, {
       audioUrl: 'ftp://cdn.example.com/narracao.mp3',
     });
 
     expect(response.isError).toBe(true);
-    expect(response.content[0].text).toMatch(/http\(s\)/i);
+    expect(response.content[0].text).toMatch(/audioUrl must be an https URL/);
+    expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
+  });
+
+  it('handleGenerateVideo returns an error for a cleartext http audioUrl', async () => {
+    vi.clearAllMocks();
+    const response = await handleGenerateVideo(mockClient, {
+      audioUrl: 'http://cdn.example.com/narracao.mp3',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toMatch(/audioUrl must be an https URL/);
     expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
   });
 
@@ -329,13 +340,22 @@ describe('MCP Tool Handlers', () => {
       ).toThrow(/exactly one/i);
     });
 
-    it('rejects a non-http(s) audioUrl', () => {
+    it('rejects a cleartext http audioUrl', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          personaId: 'persona-123',
+          audioUrl: 'http://cdn.example.com/a.mp3',
+        })
+      ).toThrow(/audioUrl must be an https URL/);
+    });
+
+    it('rejects a non-URL audioUrl', () => {
       expect(() =>
         GenerateVideoSchema.parse({
           personaId: 'persona-123',
           audioUrl: 'ftp://cdn.example.com/a.mp3',
         })
-      ).toThrow(/http\(s\)/i);
+      ).toThrow(/audioUrl must be an https URL/);
     });
 
     it('reports a blank audioUrl with the empty message, matching the direct client', () => {
@@ -532,7 +552,7 @@ describe('MCP Tool Handlers', () => {
       {
         // Invalid audioUrl in faceless mode: only the URL issue.
         input: { audioUrl: 'not-a-url' },
-        messages: ['audioUrl must be an http(s) URL'],
+        messages: ['audioUrl must be an https URL'],
       },
       {
         // Blank voiceId: only the voiceId issue.

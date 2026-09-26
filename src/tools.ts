@@ -17,7 +17,7 @@ import {
   accountIdElementMessage,
   accountIdFieldTypeMessage,
   formatValidationIssues,
-  isValidHttpUrl,
+  isValidHttpsUrl,
   buildAccountIdsMap,
   scheduleWindowMessage,
   stringFieldMessage,
@@ -120,7 +120,7 @@ export const GenerateVideoObject = z.object({
     .string({ invalid_type_error: stringFieldMessage('audioUrl') })
     .trim()
     .min(1, AUDIO_URL_EMPTY_MESSAGE)
-    .refine(isValidHttpUrl, AUDIO_URL_INVALID_MESSAGE)
+    .refine(isValidHttpsUrl, AUDIO_URL_INVALID_MESSAGE)
     .optional()
     .describe(
       'Public URL of custom audio for this video. With a persona it overrides the persona voice; for faceless generation, provide this or voiceId (not both).'

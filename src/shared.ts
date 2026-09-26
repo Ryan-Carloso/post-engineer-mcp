@@ -73,7 +73,7 @@ export function isScheduleProvider(value: unknown): value is ScheduleProvider {
 export const PERSONA_ID_REQUIRED_MESSAGE = 'personaId is required';
 export const VOICE_ID_EMPTY_MESSAGE = 'voiceId must not be empty';
 export const AUDIO_URL_EMPTY_MESSAGE = 'audioUrl must not be empty';
-export const AUDIO_URL_INVALID_MESSAGE = 'audioUrl must be an http(s) URL';
+export const AUDIO_URL_INVALID_MESSAGE = 'audioUrl must be an https URL';
 export const VIDEO_SUBJECT_REQUIRED_MESSAGE = 'videoSubject is required for faceless generation';
 
 /** Account-ID element message, e.g. 'youtubeAccountIds must contain only non-empty strings'. */
@@ -223,13 +223,19 @@ export function hasExactlyOneVoiceSource(audioUrl?: string, voiceId?: string): b
 }
 
 /**
- * Mirrors the schema's audioUrl rule: must be a parseable http(s) URL.
+ * Mirrors the schema's audioUrl rule: must be a parseable https URL.
  * Shared by the zod refinement and the client's fail-fast guard.
+ *
+ * Hardening: audioUrl is forwarded to the Post Engineer server for
+ * server-side fetching, so cleartext http:// is rejected — a
+ * man-in-the-middle on the fetch could silently substitute the audio the
+ * video renders with. This only guards the transport: the server-side
+ * fetcher must additionally refuse private/loopback address ranges, which
+ * cannot be enforced from the MCP.
  */
-export function isValidHttpUrl(value: string): boolean {
+export function isValidHttpsUrl(value: string): boolean {
   try {
-    const protocol = new URL(value).protocol;
-    return protocol === 'http:' || protocol === 'https:';
+    return new URL(value).protocol === 'https:';
   } catch {
     return false;
   }

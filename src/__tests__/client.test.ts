@@ -565,14 +565,14 @@ describe('PostEngineerClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('throws when audioUrl is not an http(s) URL', async () => {
+  it('throws when audioUrl is a cleartext http URL', async () => {
     global.fetch = vi.fn();
     await expect(
       client.generateVideoJob({
-        audioUrl: 'ftp://cdn.example.com/audio.mp3',
+        audioUrl: 'http://cdn.example.com/audio.mp3',
         videoSubject: 'Morning motivation',
       })
-    ).rejects.toThrow(/http\(s\)/i);
+    ).rejects.toThrow(/audioUrl must be an https URL/);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
@@ -587,7 +587,7 @@ describe('PostEngineerClient', () => {
         voiceId: 'elevenlabs-voice',
         videoSubject: 'Morning motivation',
       })
-    ).rejects.toThrow(/^audioUrl must be an http\(s\) URL$/);
+    ).rejects.toThrow(/^audioUrl must be an https URL$/);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 

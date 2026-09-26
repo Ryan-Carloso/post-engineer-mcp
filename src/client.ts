@@ -19,7 +19,7 @@ import {
   buildAccountIdsMap,
   formatValidationIssues,
   isScheduleProvider,
-  isValidHttpUrl,
+  isValidHttpsUrl,
   scheduleWindowMessage,
   stringFieldMessage,
   unknownProviderMessage,
@@ -527,7 +527,7 @@ export class PostEngineerClient {
     // schema: its refine runs during object parsing, before superRefine. An
     // input violating both reports the same messages in the same order on
     // both paths.
-    if (audioUrl && !isValidHttpUrl(audioUrl)) {
+    if (audioUrl && !isValidHttpsUrl(audioUrl)) {
       throw new ValidationError(AUDIO_URL_INVALID_MESSAGE);
     }
     // Cross-field rules are shared with the MCP schema
