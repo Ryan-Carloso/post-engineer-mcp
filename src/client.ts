@@ -384,7 +384,7 @@ export class PostEngineerClient {
         // is a non-empty topic override — the web prefers it over the
         // persona's default niche — sent intentionally, not by accident;
         // undefined values are omitted by JSON.stringify.
-        video_script_prompt: scriptPrompt || undefined,
+        video_script_prompt: scriptPrompt === '' ? undefined : scriptPrompt,
         audio_url: audioUrl,
         // Guarded above: voiceId is only present for faceless generation.
         voice_id: voiceId,
@@ -507,6 +507,11 @@ export class PostEngineerClient {
       }
       const { min, max } =
         field === 'postsPerDay' ? SCHEDULE_WINDOW_BOUNDS.postsPerDay : SCHEDULE_WINDOW_BOUNDS.hour;
+      // Intentional: a wrong-typed value (e.g. a string) is reported with
+      // the bounds message, not a distinct type message. The zod schema
+      // does the same (invalid_type_error is scheduleWindowMessage), so
+      // both layers stay in agreement; unlike the string fields, these
+      // numeric fields never had a separate type wording.
       const n = typeof value === 'number' ? value : NaN;
       if (!Number.isInteger(n) || n < min || n > max) {
         throw new Error(scheduleWindowMessage(field));
