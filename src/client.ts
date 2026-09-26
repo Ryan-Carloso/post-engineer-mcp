@@ -111,6 +111,11 @@ export interface NormalizedScheduleInput {
  * the schema reports on the MCP path. Field checks follow the schema's
  * field order (personaId, providers, account-IDs, scheduledAt, window,
  * timezone) so both layers report the same first error for the same input.
+ * Note: only cross-field messages are byte-identical across layers — the
+ * client throws field-level messages raw (e.g. 'personaId is required')
+ * while the MCP path prefixes them via formatValidationIssues
+ * (e.g. 'personaId: personaId is required'). Callers matching on exact
+ * error text should account for the surface.
  */
 export function normalizeScheduleInput(input: CreateScheduleInput): NormalizedScheduleInput {
   // Mirror generateVideoJob's hardening: a blank or non-string personaId
@@ -232,7 +237,10 @@ export function normalizeScheduleInput(input: CreateScheduleInput): NormalizedSc
 
   return {
     personaId,
-    providers,
+    // Dedupe here (not just at the payload use-site) so the normalized
+    // output is self-consistent: any consumer of normalized.providers
+    // sees the same value that is actually sent.
+    providers: dedupeProviders(providers),
     accountIds,
     scheduledAt,
     timezone,
@@ -548,7 +556,9 @@ export class PostEngineerClient {
         audio_url: audioUrl,
         // Guarded above: voiceId is only present for faceless generation.
         voice_id: voiceId,
-        video_subject: videoSubject,
+        // Defensive: the shared validator rejects blank videoSubject, but
+        // don't let a future rule relaxation send '' to the server.
+        video_subject: videoSubject || undefined,
       }),
     });
 
