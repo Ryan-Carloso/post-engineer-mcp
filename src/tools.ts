@@ -237,13 +237,6 @@ for (const provider of SCHEDULE_PROVIDER_NAMES) {
   const field = providerAccountIdsField(provider);
   accountIdsShape[field] = accountIdFieldSchema(field);
 }
-// Fail loudly at startup if a future refactor leaves a field unassigned:
-// the `as` cast above trusts the loop, so verify the trust.
-for (const field of SCHEDULE_PROVIDER_NAMES.map(providerAccountIdsField)) {
-  if (accountIdsShape[field] === undefined) {
-    throw new Error(`accountIdsShape is missing ${field}`);
-  }
-}
 
 export const ScheduleVideoObject = z.object({
   // required_error mirrors the direct client, which throws the type message
