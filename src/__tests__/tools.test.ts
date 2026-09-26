@@ -13,7 +13,10 @@ import {
   handleScheduleVideo,
   handleConnectAccount,
   ListPostsSchema,
+  GenerateVideoSchema,
+  ScheduleVideoSchema,
 } from '../tools.js';
+import { validateScheduleFields, formatValidationIssues } from '../shared.js';
 import type { PostEngineerClient } from '../client.js';
 
 describe('MCP Tool Handlers', () => {
@@ -90,6 +93,611 @@ describe('MCP Tool Handlers', () => {
       audioUrl: 'https://cdn.example.com/narracao.mp3',
     });
     expect(response.content[0].text).toContain('task-audio-2');
+  });
+
+  it('handleGenerateVideo returns an error when no voice source is provided', async () => {
+    vi.clearAllMocks();
+    const response = await handleGenerateVideo(mockClient, {
+      scriptPrompt: 'Top 3 AI coding assistants in 2026',
+      videoSubject: 'AI coding assistants',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toMatch(/audioUrl or voiceId/i);
+    // Form-level issue (path []) renders with no dangling "path: " prefix.
+    expect(response.content[0].text).toBe(
+      'Invalid arguments: Faceless generation requires exactly one of audioUrl or voiceId (or provide personaId)'
+    );
+    expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
+  });
+
+  it('handleGenerateVideo returns an error for faceless with both audioUrl and voiceId', async () => {
+    vi.clearAllMocks();
+    const response = await handleGenerateVideo(mockClient, {
+      audioUrl: 'https://cdn.example.com/narracao.mp3',
+      voiceId: 'voice-calm-1',
+      videoSubject: 'Morning motivation',
+    });
+
+    expect(response.isError).toBe(true);
+    // Form-level issue: no field prefix, since the combination is wrong.
+    expect(response.content[0].text).toBe(
+      'Invalid arguments: Faceless generation needs exactly one of audioUrl or voiceId, not both'
+    );
+    expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
+  });
+
+  it('handleGenerateVideo returns an error for a non-https audioUrl', async () => {
+    vi.clearAllMocks();
+    const response = await handleGenerateVideo(mockClient, {
+      audioUrl: 'ftp://cdn.example.com/narracao.mp3',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toMatch(/audioUrl must be an https URL/);
+    expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
+  });
+
+  it('handleGenerateVideo returns an error for a cleartext http audioUrl', async () => {
+    vi.clearAllMocks();
+    const response = await handleGenerateVideo(mockClient, {
+      audioUrl: 'http://cdn.example.com/narracao.mp3',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toMatch(/audioUrl must be an https URL/);
+    expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
+  });
+
+  it('handleGenerateVideo returns an error for a whitespace-only voiceId', async () => {
+    vi.clearAllMocks();
+    const response = await handleGenerateVideo(mockClient, {
+      voiceId: '   ',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toMatch(/voiceId/i);
+    expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
+  });
+
+  it('handleGenerateVideo returns an error for a whitespace-only personaId', async () => {
+    vi.clearAllMocks();
+    const response = await handleGenerateVideo(mockClient, {
+      personaId: '   ',
+      audioUrl: 'https://cdn.example.com/narracao.mp3',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toMatch(/personaId/i);
+    expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
+  });
+
+  it('handleGenerateVideo returns an error when voiceId is used with a personaId', async () => {
+    vi.clearAllMocks();
+    const response = await handleGenerateVideo(mockClient, {
+      personaId: 'persona-123',
+      voiceId: 'voice-calm-1',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toBe(
+      'Invalid arguments: voiceId: voiceId is only used for faceless generation; remove voiceId when personaId is provided'
+    );
+    expect(mockClient.generateVideoJob).not.toHaveBeenCalled();
+  });
+
+  it('handleGenerateVideo passes faceless args (no personaId) through to the client', async () => {
+    vi.mocked(mockClient.generateVideoJob).mockResolvedValue({
+      success: true,
+      taskId: 'task-faceless-1',
+    });
+
+    const response = await handleGenerateVideo(mockClient, {
+      audioUrl: 'https://cdn.example.com/narracao.mp3',
+      videoSubject: 'Morning motivation',
+    });
+
+    expect(mockClient.generateVideoJob).toHaveBeenCalledWith({
+      audioUrl: 'https://cdn.example.com/narracao.mp3',
+      videoSubject: 'Morning motivation',
+    });
+    expect(response.content[0].text).toContain('task-faceless-1');
+  });
+
+  describe('GenerateVideoSchema', () => {
+    it('parses without personaId for faceless generation', () => {
+      const parsed = GenerateVideoSchema.parse({
+        audioUrl: 'https://cdn.example.com/narracao.mp3',
+        videoSubject: 'Morning motivation',
+      });
+      expect(parsed.personaId).toBeUndefined();
+      expect(parsed.videoSubject).toBe('Morning motivation');
+    });
+
+    it('rejects an empty-string personaId', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({ personaId: '', audioUrl: 'https://cdn.example.com/a.mp3' })
+      ).toThrow();
+    });
+
+    it('rejects a voiceId alongside a personaId', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          personaId: 'persona-123',
+          voiceId: 'voice-calm-1',
+        })
+      ).toThrow(/voiceId is only used for faceless generation/i);
+    });
+
+    it('rejects faceless generation with no videoSubject', () => {
+      expect(() => GenerateVideoSchema.parse({ scriptPrompt: 'hello' })).toThrow(
+        /videoSubject is required for faceless generation/i
+      );
+    });
+
+    it('rejects a blank videoSubject for faceless generation', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          audioUrl: 'https://cdn.example.com/narracao.mp3',
+          videoSubject: '   ',
+        })
+      ).toThrow(/videoSubject is required for faceless generation/i);
+    });
+
+    it('reports a blank videoSubject alongside personaId as an invalid override', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          personaId: 'persona-123',
+          videoSubject: '   ',
+        })
+      ).toThrow(/videoSubject must be a non-empty string when provided/i);
+    });
+
+    it('reports a wrong-typed scheduledAt with the shared type message, not zod’s default', () => {
+      expect(() =>
+        ScheduleVideoSchema.parse({
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          youtubeAccountIds: ['yt-1'],
+          scheduledAt: null as unknown as string,
+        })
+      ).toThrow(/scheduledAt must be an ISO date string or Date/i);
+    });
+
+    it('reports a wrong-typed timezone with the shared message, not zod’s default', () => {
+      expect(() =>
+        ScheduleVideoSchema.parse({
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          youtubeAccountIds: ['yt-1'],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+          timezone: null as unknown as string,
+        })
+      ).toThrow(/timezone must be a string/i);
+    });
+
+    it('reports an omitted providers field with the type message, matching the direct client', () => {
+      const { providers: _omit, ...rest } = {
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      };
+      expect(() => ScheduleVideoSchema.parse(rest)).toThrow(
+        /providers must be an array of provider names/i
+      );
+    });
+
+    it('reports an omitted scheduledAt with the required message, matching the direct client', () => {
+      const { scheduledAt: _omit, ...rest } = {
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      };
+      expect(() => ScheduleVideoSchema.parse(rest)).toThrow(/scheduledAt is required/i);
+    });
+
+    it('reports an omitted personaId with the type message, matching the direct client', () => {
+      const { personaId: _omit, ...rest } = {
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      };
+      expect(() => ScheduleVideoSchema.parse(rest)).toThrow(/personaId must be a string/i);
+    });
+
+    it('reports a non-array account-ID field with the shared message, not zod’s default', () => {
+      expect(() =>
+        ScheduleVideoSchema.parse({
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          youtubeAccountIds: 'yt-1' as unknown as string[],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+        })
+      ).toThrow(/youtubeAccountIds must be an array of strings/i);
+    });
+
+    it('reports a non-string account-ID element with the shared message, not zod’s default', () => {
+      expect(() =>
+        ScheduleVideoSchema.parse({
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          youtubeAccountIds: [42] as unknown as string[],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+        })
+      ).toThrow(/youtubeAccountIds must contain only non-empty strings/i);
+    });
+
+    it('rejects faceless generation with both audioUrl and voiceId', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          audioUrl: 'https://cdn.example.com/narracao.mp3',
+          voiceId: 'voice-calm-1',
+          videoSubject: 'Morning motivation',
+        })
+      ).toThrow(/exactly one/i);
+    });
+
+    it('rejects a cleartext http audioUrl', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          personaId: 'persona-123',
+          audioUrl: 'http://cdn.example.com/a.mp3',
+        })
+      ).toThrow(/audioUrl must be an https URL/);
+    });
+
+    it('rejects a non-URL audioUrl', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          personaId: 'persona-123',
+          audioUrl: 'ftp://cdn.example.com/a.mp3',
+        })
+      ).toThrow(/audioUrl must be an https URL/);
+    });
+
+    it('reports a blank audioUrl with the empty message, matching the direct client', () => {
+      const result = GenerateVideoSchema.safeParse({
+        personaId: 'persona-123',
+        audioUrl: '   ',
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.map((issue) => issue.message)).toContain(
+          'audioUrl must not be empty'
+        );
+      }
+    });
+
+    it('accepts faceless generation with only voiceId', () => {
+      const parsed = GenerateVideoSchema.parse({
+        voiceId: 'voice-calm-1',
+        videoSubject: 'Morning motivation',
+      });
+      expect(parsed.voiceId).toBe('voice-calm-1');
+      expect(parsed.personaId).toBeUndefined();
+    });
+  });
+
+  describe('ScheduleVideoSchema', () => {
+    it("accepts 'bluesky' as a provider", () => {
+      const parsed = ScheduleVideoSchema.parse({
+        personaId: 'persona-123',
+        providers: ['bluesky'],
+        blueskyAccountIds: ['bsky-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      });
+      expect(parsed.providers).toEqual(['bluesky']);
+      expect(parsed.blueskyAccountIds).toEqual(['bsky-1']);
+    });
+
+    it('trims a padded scheduledAt on the schema path', () => {
+      const parsed = ScheduleVideoSchema.parse({
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: '  2026-10-01T10:00:00.000Z  ',
+      });
+      expect(parsed.scheduledAt).toBe('2026-10-01T10:00:00.000Z');
+    });
+
+    it('trims padded provider names before the enum check', () => {
+      const parsed = ScheduleVideoSchema.parse({
+        personaId: 'persona-123',
+        providers: [' youtube '],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      });
+      expect(parsed.providers).toEqual(['youtube']);
+    });
+
+    it('reports an unknown provider with the shared message, not zod’s default', () => {
+      // Assert on the issue message directly (not the JSON-stringified
+      // ZodError.message) so no quote-escaping is involved.
+      const result = ScheduleVideoSchema.safeParse({
+        personaId: 'persona-123',
+        providers: ['tiktok'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      });
+      expect(result.success).toBe(false);
+      if (result.success) {
+        return;
+      }
+      expect(result.error.issues).toHaveLength(1);
+      expect(result.error.issues[0]?.message).toBe(
+        'Unknown provider "tiktok". Must be one of: youtube, instagram, linkedin, bluesky'
+      );
+    });
+
+    it('reports schedule-window violations with the shared messages, like the client', () => {
+    const cases: Array<{ input: Record<string, unknown>; message: string }> = [
+      {
+        input: {
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          youtubeAccountIds: ['yt-1'],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+          daysOfWeek: [7],
+        },
+        message: 'daysOfWeek must be an array of integers between 0 and 6',
+      },
+      {
+        input: {
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          youtubeAccountIds: ['yt-1'],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+          startHour: 24,
+        },
+        message: 'startHour must be an integer between 0 and 23',
+      },
+      {
+        input: {
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          youtubeAccountIds: ['yt-1'],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+          postsPerDay: 0,
+        },
+        message: 'postsPerDay must be an integer between 1 and 10',
+      },
+    ];
+    for (const { input, message } of cases) {
+      const result = ScheduleVideoSchema.safeParse(input);
+      expect(result.success).toBe(false);
+      if (result.success) {
+        continue;
+      }
+      expect(result.error.issues.map((issue) => issue.message)).toContain(message);
+    }
+  });
+
+  it('does not add cross-field issues when a schedule field-level rule fails', () => {
+    // Same fail-fast parity as GenerateVideoSchema: a blank personaId is
+    // the real problem, so no per-provider account-ID issues are added.
+    const result = ScheduleVideoSchema.safeParse({
+      personaId: '  ',
+      providers: ['youtube'],
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+    });
+    expect(result.success).toBe(false);
+    if (result.success) {
+      return;
+    }
+    expect(result.error.issues.map((issue) => issue.message)).toEqual([
+      'personaId is required',
+    ]);
+  });
+
+  it('formats multi-issue errors identically to the direct client', () => {
+    // The MCP transport (parseArgsOrError) and the direct client both use
+    // formatValidationIssues, so the same invalid input yields the same text.
+    const mcp = ScheduleVideoSchema.safeParse({
+      personaId: 'persona-123',
+      providers: ['youtube', 'instagram'],
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+    });
+    expect(mcp.success).toBe(false);
+    if (mcp.success) {
+      return;
+    }
+    const clientIssues = validateScheduleFields({
+      providers: ['youtube', 'instagram'],
+      accountIds: () => undefined,
+    });
+    expect(`Invalid arguments: ${formatValidationIssues(mcp.error.issues)}`).toBe(
+      `Invalid arguments: ${formatValidationIssues(clientIssues)}`
+    );
+  });
+
+  it('trims a padded timezone and rejects a blank one, like the client', () => {
+    const padded = ScheduleVideoSchema.safeParse({
+      personaId: 'persona-123',
+      providers: ['youtube'],
+      youtubeAccountIds: ['yt-1'],
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+      timezone: '  America/Sao_Paulo  ',
+    });
+    expect(padded.success).toBe(true);
+    if (padded.success) {
+      expect(padded.data.timezone).toBe('America/Sao_Paulo');
+    }
+    const blank = ScheduleVideoSchema.safeParse({
+      personaId: 'persona-123',
+      providers: ['youtube'],
+      youtubeAccountIds: ['yt-1'],
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+      timezone: '   ',
+    });
+    expect(blank.success).toBe(false);
+    if (!blank.success) {
+      expect(blank.error.issues.map((issue) => issue.message)).toEqual([
+        'timezone must not be empty',
+      ]);
+    }
+  });
+
+  it('does not add cross-field issues when a field-level rule fails, like the client', () => {
+    // The direct client throws the first field-level error and never
+    // reaches the cross-field rules; the schema must not report extra,
+    // misleading issues on top of the field-level failure.
+    const cases: Array<{ input: Record<string, unknown>; messages: string[] }> = [
+      {
+        // Blank personaId: only the personaId issue, not videoSubject/voice issues.
+        input: { personaId: '  ', videoSubject: '' },
+        messages: ['personaId is required'],
+      },
+      {
+        // Invalid audioUrl in faceless mode: only the URL issue.
+        input: { audioUrl: 'not-a-url' },
+        messages: ['audioUrl must be an https URL'],
+      },
+      {
+        // Blank voiceId: only the voiceId issue.
+        input: { voiceId: '  ' },
+        messages: ['voiceId must not be empty'],
+      },
+    ];
+    for (const { input, messages } of cases) {
+      const result = GenerateVideoSchema.safeParse(input);
+      expect(result.success).toBe(false);
+      if (result.success) {
+        continue;
+      }
+      expect(result.error.issues.map((issue) => issue.message)).toEqual(messages);
+    }
+  });
+
+  it('reports non-array providers with the shared type message, like the client', () => {
+    const result = ScheduleVideoSchema.safeParse({
+      personaId: 'persona-123',
+      providers: 'youtube',
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+    });
+    expect(result.success).toBe(false);
+    if (result.success) {
+      return;
+    }
+    expect(result.error.issues[0]?.message).toBe(
+      'providers must be an array of provider names'
+    );
+  });
+
+  it('dedupes providers in the schema, matching the direct client', () => {
+      const parsed = ScheduleVideoSchema.parse({
+        personaId: 'persona-123',
+        providers: ['youtube', 'youtube', ' instagram '],
+        youtubeAccountIds: ['yt-1'],
+        instagramAccountIds: ['ig-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      });
+      expect(parsed.providers).toEqual(['youtube', 'instagram']);
+    });
+
+    it('reports a non-string field with the shared message, not zod’s default', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          audioUrl: 42 as unknown as string,
+          videoSubject: 'Morning motivation',
+        })
+      ).toThrow(/audioUrl must be a string/i);
+    });
+
+    it('trims scriptPrompt on the schema path, matching the client normalization', () => {
+      const parsed = GenerateVideoSchema.parse({
+        personaId: 'persona-123',
+        scriptPrompt: '  Make it punchy  ',
+      });
+      expect(parsed.scriptPrompt).toBe('Make it punchy');
+    });
+
+    it('reports every faceless issue at once', () => {
+      expect(() => GenerateVideoSchema.parse({})).toThrow(
+        /videoSubject is required for faceless generation/i
+      );
+      try {
+        GenerateVideoSchema.parse({});
+        expect.unreachable();
+      } catch (error) {
+        const message = (error as Error).message;
+        expect(message).toMatch(/videoSubject is required for faceless generation/i);
+        expect(message).toMatch(/exactly one of audioUrl or voiceId/i);
+      }
+    });
+
+    it('reports a blank voiceId with the shared empty message', () => {
+      expect(() =>
+        GenerateVideoSchema.parse({
+          voiceId: '   ',
+          videoSubject: 'Morning motivation',
+        })
+      ).toThrow(/voiceId must not be empty/i);
+    });
+
+    it('reports a blank account ID with the field-specific message', () => {
+      expect(() =>
+        ScheduleVideoSchema.parse({
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          youtubeAccountIds: ['  '],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+        })
+      ).toThrow(/youtubeAccountIds must contain only non-empty strings/i);
+    });
+
+    it('defaults blueskyAccountIds to an empty array', () => {
+      const parsed = ScheduleVideoSchema.parse({
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      });
+      expect(parsed.blueskyAccountIds).toEqual([]);
+    });
+
+    it("rejects 'bluesky' with empty blueskyAccountIds", () => {
+      expect(() =>
+        ScheduleVideoSchema.parse({
+          personaId: 'persona-123',
+          providers: ['bluesky'],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+        })
+      ).toThrow(/blueskyAccountIds/i);
+    });
+
+    it("rejects 'youtube' with empty youtubeAccountIds", () => {
+      expect(() =>
+        ScheduleVideoSchema.parse({
+          personaId: 'persona-123',
+          providers: ['youtube'],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+        })
+      ).toThrow(/youtubeAccountIds/i);
+    });
+
+    it('accepts each provider with its account IDs present', () => {
+      const parsed = ScheduleVideoSchema.parse({
+        personaId: 'persona-123',
+        providers: ['youtube', 'bluesky'],
+        youtubeAccountIds: ['yt-1'],
+        blueskyAccountIds: ['bsky-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      });
+      expect(parsed.providers).toEqual(['youtube', 'bluesky']);
+    });
+
+    it('rejects blank-string account IDs', () => {
+      expect(() =>
+        ScheduleVideoSchema.parse({
+          personaId: 'persona-123',
+          providers: ['bluesky'],
+          blueskyAccountIds: [''],
+          scheduledAt: '2026-10-01T10:00:00.000Z',
+        })
+      ).toThrow();
+    });
   });
 
   it('handleListVoices returns the voice catalog', async () => {
@@ -229,6 +837,63 @@ describe('MCP Tool Handlers', () => {
 
     expect(response.isError).toBe(true);
     expect(response.content[0].text).toMatch(/at least 24 hours/i);
+  });
+
+  it('handleScheduleVideo returns an error when a provider has no account IDs', async () => {
+    vi.clearAllMocks();
+    const response = await handleScheduleVideo(mockClient, {
+      personaId: 'persona-123',
+      providers: ['bluesky'],
+      blueskyAccountIds: [],
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toBe(
+      "Invalid arguments: blueskyAccountIds: providers includes 'bluesky' but blueskyAccountIds is empty"
+    );
+    expect(mockClient.createSchedule).not.toHaveBeenCalled();
+  });
+
+  it('handleScheduleVideo reports a duplicated provider only once', async () => {
+    vi.clearAllMocks();
+    const response = await handleScheduleVideo(mockClient, {
+      personaId: 'persona-123',
+      providers: ['youtube', 'youtube'],
+      youtubeAccountIds: [],
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toBe(
+      "Invalid arguments: youtubeAccountIds: providers includes 'youtube' but youtubeAccountIds is empty"
+    );
+    expect(mockClient.createSchedule).not.toHaveBeenCalled();
+  });
+
+  it('ScheduleVideoSchema superRefine delegates to the shared schedule validator', () => {
+    // validateScheduleFields is the single source of truth for the
+    // per-provider account-ID rule: the schema only maps its issues to zod
+    // issues, so both layers surface the same messages.
+    const schemaResult = ScheduleVideoSchema.safeParse({
+      personaId: 'persona-123',
+      providers: ['youtube', 'bluesky'],
+      scheduledAt: '2026-10-01T10:00:00.000Z',
+    });
+    expect(schemaResult.success).toBe(false);
+    if (schemaResult.success) {
+      return;
+    }
+    expect(schemaResult.error.issues.map((i) => [i.path.join('.'), i.message])).toEqual(
+      validateScheduleFields({
+        providers: ['youtube', 'bluesky'],
+        accountIds: () => undefined,
+      }).map((i) => [i.path.join('.'), i.message])
+    );
+    expect(schemaResult.error.issues.map((i) => i.message)).toEqual([
+      "providers includes 'youtube' but youtubeAccountIds is empty",
+      "providers includes 'bluesky' but blueskyAccountIds is empty",
+    ]);
   });
 
   it('handleConnectAccount returns the OAuth authorization URL with instructions', async () => {

@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { PostEngineerClient } from './client.js';
+import { DIRECT_CONNECT_PROVIDERS, SCHEDULE_PROVIDER_NAMES, providerDisplayName } from './shared.js';
 import {
   handleCreatePersona,
   handleListPersonas,
@@ -18,6 +19,8 @@ import {
   handleGenerateVideo,
   handleGetVideoStatus,
   handleScheduleVideo,
+  GenerateVideoObject,
+  ScheduleVideoObject,
 } from './tools.js';
 import { startHttpServer } from './http.js';
 
@@ -96,7 +99,7 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
 
   server.tool(
     'list_social_accounts',
-    'List connected social accounts (YouTube, Instagram, LinkedIn) with the account IDs needed for schedule_video.',
+    `List connected social accounts (${SCHEDULE_PROVIDER_NAMES.map(providerDisplayName).join(', ')}) with the account IDs needed for schedule_video.`,
     {},
     async () => {
       return handleListSocialAccounts(apiClient);
@@ -105,9 +108,15 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
 
   server.tool(
     'connect_account',
-    'Connect a social account. For youtube/instagram/linkedin: returns an authorization URL — the user must open it in a browser and authorize, then the account connects automatically (verify with list_social_accounts). For bluesky: connects directly with handle + appPassword (app password, not the main account password).',
+    `Connect a social account. For ${SCHEDULE_PROVIDER_NAMES.filter(
+      (p) => !DIRECT_CONNECT_PROVIDERS.includes(p)
+    )
+      .map(providerDisplayName)
+      .join('/')}: returns an authorization URL — the user must open it in a browser and authorize, then the account connects automatically (verify with list_social_accounts). For ${DIRECT_CONNECT_PROVIDERS.map(
+      providerDisplayName
+    ).join('/')}: connects directly with handle + appPassword (app password, not the main account password).`,
     {
-      provider: z.enum(['youtube', 'instagram', 'linkedin', 'bluesky']).describe('The social platform to connect'),
+      provider: z.enum(SCHEDULE_PROVIDER_NAMES).describe('The social platform to connect'),
       handle: z.string().min(1).optional().describe('Bluesky handle (e.g. user.bsky.social). Required only for bluesky.'),
       appPassword: z.string().min(1).optional().describe('Bluesky app password (Settings > App passwords). Required only for bluesky. Never shared or logged.'),
     },
@@ -158,12 +167,14 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
 
   server.tool(
     'generate_video_from_persona',
-    'Trigger video generation using an existing persona. Optional scriptPrompt overrides the video script; optional audioUrl (public http(s) URL) supplies custom audio for this video, overriding the persona voice.',
-    {
-      personaId: z.string().min(1, 'personaId is required').describe('The ID of the persona to generate video with'),
-      scriptPrompt: z.string().optional().describe('Optional specific prompt override for this video'),
-      audioUrl: z.string().url('audioUrl must be a valid URL').optional().describe('Optional public URL of custom audio for this video (overrides the persona voice)'),
-    },
+    'Trigger video generation using an existing persona, or faceless (omit personaId). Faceless: required videoSubject plus exactly one of audioUrl (public https URL) or voiceId (see list_voices) supplies the voice; optional scriptPrompt overrides the script. With a persona: optional scriptPrompt overrides the video script; optional audioUrl supplies custom audio, overriding the persona voice (voiceId is rejected).',
+    // Base object shape: the cross-field rules live on GenerateVideoSchema
+    // (superRefine) and are enforced in handleGenerateVideo, since the SDK
+    // only accepts raw shapes here. Note: every request is therefore
+    // validated twice (the SDK parses the shape, the handler re-parses the
+    // full schema) — the handler-side parse is the load-bearing one, so keep
+    // both in sync.
+    GenerateVideoObject.shape,
     async (args) => {
       return handleGenerateVideo(apiClient, args);
     }
@@ -183,24 +194,13 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
   server.tool(
     'schedule_video',
     'Schedule automated video generation and posting to social channels. IMPORTANT: Schedules must be between 24h and 30 days in advance. Each provider requires at least one account ID — discover them with list_social_accounts first.',
-    {
-      personaId: z.string().min(1, 'personaId is required').describe('The ID of the persona'),
-      providers: z
-        .array(z.enum(['youtube', 'instagram', 'linkedin']))
-        .min(1, 'At least one provider required')
-        .describe('Target social platforms'),
-      youtubeAccountIds: z.array(z.string()).optional().default([]),
-      instagramAccountIds: z.array(z.string()).optional().default([]),
-      linkedinAccountIds: z.array(z.string()).optional().default([]),
-      scheduledAt: z
-        .string()
-        .describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
-      daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
-      startHour: z.number().int().min(0).max(23).optional(),
-      endHour: z.number().int().min(0).max(23).optional(),
-      postsPerDay: z.number().int().min(1).max(10).optional(),
-      timezone: z.string().optional().default('UTC'),
-    },
+    // Base object shape: the per-provider account rule lives on
+    // ScheduleVideoSchema (superRefine) and is enforced in
+    // handleScheduleVideo, since the SDK only accepts raw shapes here.
+    // Note: every request is therefore validated twice (the SDK parses the
+    // shape, the handler re-parses the full schema) — the handler-side parse
+    // is the load-bearing one, so keep both in sync.
+    ScheduleVideoObject.shape,
     async (args) => {
       return handleScheduleVideo(apiClient, args);
     }

@@ -1,6 +1,31 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { PostEngineerClient } from './client.js';
+import {
+  AUDIO_URL_EMPTY_MESSAGE,
+  AUDIO_URL_INVALID_MESSAGE,
+  PERSONA_ID_REQUIRED_MESSAGE,
+  PROVIDERS_REQUIRED_MESSAGE,
+  PROVIDERS_TYPE_MESSAGE,
+  SCHEDULED_AT_REQUIRED_MESSAGE,
+  SCHEDULED_AT_TYPE_MESSAGE,
+  SCHEDULE_WINDOW_BOUNDS,
+  TIMEZONE_EMPTY_MESSAGE,
+  SCHEDULE_PROVIDER_NAMES,
+  VOICE_ID_EMPTY_MESSAGE,
+  dedupeProviders,
+  accountIdElementMessage,
+  accountIdFieldTypeMessage,
+  formatValidationIssues,
+  isValidHttpsUrl,
+  buildAccountIdsMap,
+  scheduleWindowMessage,
+  stringFieldMessage,
+  unknownProviderMessage,
+  validateGenerateVideoFields,
+  validateScheduleFields,
+} from './shared.js';
+import type { ProviderAccountIdsField } from './shared.js';
 
 export type McpToolResponse = CallToolResult;
 
@@ -38,7 +63,7 @@ export const UpdatePersonaSchema = z.object({
 export const ListSocialAccountsSchema = z.object({});
 
 export const ConnectAccountSchema = z.object({
-  provider: z.enum(['youtube', 'instagram', 'linkedin', 'bluesky']),
+  provider: z.enum(SCHEDULE_PROVIDER_NAMES),
   handle: z.string().min(1).optional(),
   appPassword: z.string().min(1).optional(),
 });
@@ -55,28 +80,217 @@ export const CancelScheduleSchema = z.object({
 
 export const GetTokenBalanceSchema = z.object({});
 
-export const GenerateVideoSchema = z.object({
-  personaId: z.string().min(1, 'personaId is required'),
-  scriptPrompt: z.string().optional(),
-  audioUrl: z.string().url('audioUrl must be a valid URL').optional().describe('Public URL of custom audio for this video (overrides the persona voice)'),
+type ParsedArgs<T> = { data: T; error?: undefined } | { data?: undefined; error: McpToolResponse };
+
+/**
+ * Enforce a schema's cross-field rules (superRefine) and convert failures
+ * into an MCP error response. The SDK validates only the raw shape at the
+ * tool boundary, which is the whole schema for plain z.object tools — but
+ * for tools whose schemas carry cross-field rules, the handlers are the
+ * enforcement point for every transport (stdio and HTTP).
+ */
+function parseArgsOrError<Input, Output>(
+  schema: z.ZodType<Output, z.ZodTypeDef, Input>,
+  args: Input
+): ParsedArgs<Output> {
+  const parsed = schema.safeParse(args);
+  if (!parsed.success) {
+    return {
+      error: {
+        content: [
+          {
+            type: 'text',
+            // Same formatting as the direct client's thrown errors
+            // (formatValidationIssues), so both layers report the same
+            // text for the same input.
+            text: `Invalid arguments: ${formatValidationIssues(parsed.error.issues)}`,
+          },
+        ],
+        isError: true,
+      },
+    };
+  }
+  return { data: parsed.data };
+}
+
+export const GenerateVideoObject = z.object({
+  personaId: z.string({ invalid_type_error: stringFieldMessage('personaId') }).trim().min(1, PERSONA_ID_REQUIRED_MESSAGE).optional().describe('The ID of the persona to generate video with. Omit for faceless generation.'),
+  scriptPrompt: z.string({ invalid_type_error: stringFieldMessage('scriptPrompt') }).trim().optional().describe('Optional specific prompt override for this video'),
+  audioUrl: z
+    .string({ invalid_type_error: stringFieldMessage('audioUrl') })
+    .trim()
+    .min(1, AUDIO_URL_EMPTY_MESSAGE)
+    .refine(isValidHttpsUrl, AUDIO_URL_INVALID_MESSAGE)
+    .optional()
+    .describe(
+      'Public URL of custom audio for this video. With a persona it overrides the persona voice; for faceless generation, provide this or voiceId (not both).'
+    ),
+  voiceId: z
+    .string({ invalid_type_error: stringFieldMessage('voiceId') })
+    .trim()
+    .min(1, VOICE_ID_EMPTY_MESSAGE)
+    .optional()
+    .describe(
+      'Voice ID for this video (see list_voices). Only used for faceless generation (rejected when personaId is provided); provide this or audioUrl, not both.'
+    ),
+  videoSubject: z
+    .string({ invalid_type_error: stringFieldMessage('videoSubject') })
+    .trim()
+    .optional()
+    .describe(
+      'Subject/topic of the video. Required for faceless generation (when personaId is omitted); sent as video_subject.'
+    ),
+});
+
+export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) => {
+  // Fail-fast parity with the direct client: it throws the first
+  // field-level error and never reaches the cross-field rules, so the
+  // schema must not add cross-field issues on top of a field-level
+  // failure — otherwise MCP callers see extra, misleading issues for the
+  // same input (e.g. "videoSubject is required" for a request whose real
+  // problem is a blank personaId). Note: zod v3 DOES run superRefine when
+  // field-level validation fails (val carries the failed values), so this
+  // guard is load-bearing, not dead code — removing it reintroduces the
+  // stacked issues (see the field-failure parity tests). The flag is
+  // derived by re-running the base object's field chains instead of
+  // mirroring them by hand, so the field chains stay the single source
+  // of truth; the re-parse costs microseconds on a network-bound tool
+  // call.
+  if (!GenerateVideoObject.safeParse(val).success) {
+    return;
+  }
+  // Cross-field rules are shared with the direct client
+  // (validateGenerateVideoFields) so the layers can't diverge; the schema
+  // only maps each issue to a zod issue with its path.
+  for (const issue of validateGenerateVideoFields({
+    personaId: val.personaId,
+    audioUrl: val.audioUrl,
+    voiceId: val.voiceId,
+    videoSubject: val.videoSubject,
+  })) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: issue.path, message: issue.message });
+  }
 });
 
 export const GetVideoStatusSchema = z.object({
   taskId: z.string().min(1, 'taskId is required'),
 });
 
-export const ScheduleVideoSchema = z.object({
-  personaId: z.string().min(1, 'personaId is required'),
-  providers: z.array(z.enum(['youtube', 'instagram', 'linkedin'])).min(1, 'At least one provider required'),
-  youtubeAccountIds: z.array(z.string()).optional().default([]),
-  instagramAccountIds: z.array(z.string()).optional().default([]),
-  linkedinAccountIds: z.array(z.string()).optional().default([]),
-  scheduledAt: z.string().describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
-  daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
-  startHour: z.number().int().min(0).max(23).optional(),
-  endHour: z.number().int().min(0).max(23).optional(),
-  postsPerDay: z.number().int().min(1).max(10).optional(),
-  timezone: z.string().optional().default('UTC'),
+export const ScheduleProvidersSchema = z.preprocess(
+  // Trim each entry (like the direct client) and dedupe: the client also
+  // dedupes via new Set, so the contract is explicit here rather than an
+  // implementation coincidence. preprocess (not pipe/transform) keeps the
+  // advertised JSON Schema as a plain enum array.
+  (value) =>
+    Array.isArray(value)
+      ? dedupeProviders(value.map((item) => (typeof item === 'string' ? item.trim() : item)))
+      : value,
+  z
+    .array(
+      z.enum(SCHEDULE_PROVIDER_NAMES, {
+        // Same wording as the direct client's unknownProviderMessage, so
+        // both layers report the same message for the same input.
+        errorMap: (issue, ctx) => ({
+          message:
+            issue.code === z.ZodIssueCode.invalid_enum_value
+              ? unknownProviderMessage(ctx.data)
+              : ctx.defaultError,
+        }),
+      }),
+      // Same wording as the direct client's non-array guard, so both layers
+      // report the same message for the same input. required_error covers
+      // an omitted field (zod only uses invalid_type_error for present but
+      // wrong-typed values); the client likewise throws the type message
+      // for a non-array providers input.
+      { invalid_type_error: PROVIDERS_TYPE_MESSAGE, required_error: PROVIDERS_TYPE_MESSAGE }
+    )
+    .min(1, PROVIDERS_REQUIRED_MESSAGE)
+);
+
+/**
+ * Account-ID fields, one per provider. Element messages match the direct
+ * client's accountIdElementMessage wording, and the array's
+ * invalid_type_error matches accountIdFieldTypeMessage.
+ */
+const accountIdFieldSchema = (field: ProviderAccountIdsField) =>
+  z
+    .array(
+      z
+        .string({ invalid_type_error: accountIdElementMessage(field) })
+        .trim()
+        .min(1, accountIdElementMessage(field)),
+      { invalid_type_error: accountIdFieldTypeMessage(field) }
+    )
+    .optional()
+    .default([]);
+
+// Generated from SCHEDULE_PROVIDER_NAMES so a new provider is added in one
+// place. Uses the shared buildAccountIdsMap factory so the per-provider
+// map construction (and its cast soundness) lives in one location.
+const accountIdsShape = buildAccountIdsMap((field) => accountIdFieldSchema(field));
+
+export const ScheduleVideoObject = z.object({
+  // required_error mirrors the direct client, which throws the type message
+  // (not a presence message) for an omitted personaId.
+  personaId: z.string({ invalid_type_error: stringFieldMessage('personaId'), required_error: stringFieldMessage('personaId') }).trim().min(1, PERSONA_ID_REQUIRED_MESSAGE),
+  providers: ScheduleProvidersSchema.describe('Target social platforms'),
+  ...accountIdsShape,
+  // Wrong-typed scheduledAt reports the client's type message (not the
+  // string-only wording): the MCP transport serializes to JSON, so a Date
+  // never reaches this chain in practice, and both layers name the same
+  // accepted shapes.
+  scheduledAt: z.string({ invalid_type_error: SCHEDULED_AT_TYPE_MESSAGE, required_error: SCHEDULED_AT_REQUIRED_MESSAGE }).trim().min(1, SCHEDULED_AT_REQUIRED_MESSAGE).describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
+  // Window bounds and messages are shared with the direct client's
+  // fail-fast guards (SCHEDULE_WINDOW_BOUNDS / scheduleWindowMessage), so
+  // both layers enforce and report the same values.
+  daysOfWeek: z
+    .array(
+      z
+        .number({ invalid_type_error: scheduleWindowMessage('daysOfWeek') })
+        .int(scheduleWindowMessage('daysOfWeek'))
+        .min(SCHEDULE_WINDOW_BOUNDS.dayOfWeek.min, scheduleWindowMessage('daysOfWeek'))
+        .max(SCHEDULE_WINDOW_BOUNDS.dayOfWeek.max, scheduleWindowMessage('daysOfWeek')),
+      { invalid_type_error: scheduleWindowMessage('daysOfWeek') }
+    )
+    .optional(),
+  startHour: z
+    .number({ invalid_type_error: scheduleWindowMessage('startHour') })
+    .int(scheduleWindowMessage('startHour'))
+    .min(SCHEDULE_WINDOW_BOUNDS.hour.min, scheduleWindowMessage('startHour'))
+    .max(SCHEDULE_WINDOW_BOUNDS.hour.max, scheduleWindowMessage('startHour'))
+    .optional(),
+  endHour: z
+    .number({ invalid_type_error: scheduleWindowMessage('endHour') })
+    .int(scheduleWindowMessage('endHour'))
+    .min(SCHEDULE_WINDOW_BOUNDS.hour.min, scheduleWindowMessage('endHour'))
+    .max(SCHEDULE_WINDOW_BOUNDS.hour.max, scheduleWindowMessage('endHour'))
+    .optional(),
+  postsPerDay: z
+    .number({ invalid_type_error: scheduleWindowMessage('postsPerDay') })
+    .int(scheduleWindowMessage('postsPerDay'))
+    .min(SCHEDULE_WINDOW_BOUNDS.postsPerDay.min, scheduleWindowMessage('postsPerDay'))
+    .max(SCHEDULE_WINDOW_BOUNDS.postsPerDay.max, scheduleWindowMessage('postsPerDay'))
+    .optional(),
+  timezone: z.string({ invalid_type_error: stringFieldMessage('timezone') }).trim().min(1, TIMEZONE_EMPTY_MESSAGE).optional().default('UTC'),
+});
+
+export const ScheduleVideoSchema = ScheduleVideoObject.superRefine((val, ctx) => {
+  // Same fail-fast parity guard as GenerateVideoSchema: skip cross-field
+  // rules when field-level validation already failed, so callers don't see
+  // misleading extra issues on top of the real problem. Derived from the
+  // base object's field chains, not hand-mirrored.
+  if (!ScheduleVideoObject.safeParse(val).success) {
+    return;
+  }
+  // Cross-field rules are shared with the direct client
+  // (validateScheduleFields) so the layers can't diverge; the schema only
+  // maps each issue to a zod issue with its path.
+  for (const issue of validateScheduleFields({
+    providers: val.providers,
+    accountIds: (field) => val[field],
+  })) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: issue.path, message: issue.message });
+  }
 });
 
 export async function handleCreatePersona(
@@ -411,10 +625,17 @@ export async function handleGetTokenBalance(
 
 export async function handleGenerateVideo(
   client: PostEngineerClient,
-  args: z.infer<typeof GenerateVideoSchema>
+  // z.input (not z.infer): at the transport boundary the SDK hands us the
+  // raw, unparsed args — re-parsed below via parseArgsOrError.
+  args: z.input<typeof GenerateVideoSchema>
 ): Promise<McpToolResponse> {
+  // Cross-field rules (faceless needs a voice source; exactly one of
+  // audioUrl/voiceId) live on the schema — the SDK only checks the raw
+  // shape, so enforce them here for every transport.
+  const parsed = parseArgsOrError(GenerateVideoSchema, args);
+  if (parsed.error) return parsed.error;
   try {
-    const result = await client.generateVideoJob(args);
+    const result = await client.generateVideoJob(parsed.data);
     return {
       content: [
         {
@@ -465,10 +686,17 @@ export async function handleGetVideoStatus(
 
 export async function handleScheduleVideo(
   client: PostEngineerClient,
-  args: z.infer<typeof ScheduleVideoSchema>
+  // z.input (not z.infer): at the transport boundary the SDK hands us the
+  // raw, unparsed args — re-parsed below via parseArgsOrError.
+  args: z.input<typeof ScheduleVideoSchema>
 ): Promise<McpToolResponse> {
+  // Cross-field rule (each declared provider needs its account IDs) lives
+  // on the schema — the SDK only checks the raw shape, so enforce it here
+  // for every transport.
+  const parsed = parseArgsOrError(ScheduleVideoSchema, args);
+  if (parsed.error) return parsed.error;
   try {
-    const result = await client.createSchedule(args);
+    const result = await client.createSchedule(parsed.data);
     return {
       content: [
         {

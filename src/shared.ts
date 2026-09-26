@@ -1,0 +1,355 @@
+/**
+ * Shared constants and predicates used by both the MCP tool schemas
+ * (tools.ts) and the API client (client.ts). Kept in its own module so the
+ * client does not pull in zod and the whole tool registry at runtime.
+ */
+
+/** Single source of truth for the schedule providers. */
+export const SCHEDULE_PROVIDER_NAMES = ['youtube', 'instagram', 'linkedin', 'bluesky'] as const;
+export type ScheduleProvider = (typeof SCHEDULE_PROVIDER_NAMES)[number];
+
+/**
+ * Providers that connect directly with credentials (not via OAuth URL).
+ * Used to derive the connect_account tool description so it can't drift
+ * from the provider set.
+ */
+export const DIRECT_CONNECT_PROVIDERS: readonly ScheduleProvider[] = ['bluesky'];
+
+/**
+ * Dedupe a provider list, preserving first-seen order. Shared by the
+ * schema preprocess, the direct client's payload builder, and the
+ * missing-account-ID check so the rule lives in one place.
+ */
+export function dedupeProviders<T>(providers: readonly T[]): T[] {
+  return [...new Set(providers)];
+}
+
+/** Account-ID field name for a provider, e.g. 'youtube' -> 'youtubeAccountIds'. */
+export type ProviderAccountIdsField = `${ScheduleProvider}AccountIds`;
+
+export function providerAccountIdsField(provider: ScheduleProvider): ProviderAccountIdsField {
+  return `${provider}AccountIds`;
+}
+
+/**
+ * Build a per-provider account-ID map in one place. The `as` cast is sound:
+ * the loop iterates every SCHEDULE_PROVIDER_NAMES entry, so every
+ * ProviderAccountIdsField key is assigned. Both the MCP schema builder
+ * (tools.ts) and the direct-client normalizer (client.ts) use this so the
+ * cast's soundness is guaranteed in a single location.
+ */
+export function buildAccountIdsMap<T>(
+  makeValue: (field: ProviderAccountIdsField) => T
+): Record<ProviderAccountIdsField, T> {
+  const map = {} as Record<ProviderAccountIdsField, T>;
+  for (const provider of SCHEDULE_PROVIDER_NAMES) {
+    const field = providerAccountIdsField(provider);
+    map[field] = makeValue(field);
+  }
+  return map;
+}
+
+/** Human-readable provider label with brand-correct casing, shown to LLM callers. */
+const PROVIDER_DISPLAY_NAMES: Record<ScheduleProvider, string> = {
+  youtube: 'YouTube',
+  instagram: 'Instagram',
+  linkedin: 'LinkedIn',
+  bluesky: 'Bluesky',
+};
+
+export function providerDisplayName(provider: ScheduleProvider): string {
+  return PROVIDER_DISPLAY_NAMES[provider];
+}
+
+/** Type guard for untyped callers: is this a known schedule provider? */
+export function isScheduleProvider(value: unknown): value is ScheduleProvider {
+  return typeof value === 'string' && (SCHEDULE_PROVIDER_NAMES as readonly string[]).includes(value);
+}
+
+// Per-field validation messages shared by the zod schemas (tools.ts) and
+// the direct client's fail-fast guards (client.ts): both layers must report
+// the same message for the same input, so the wording lives here — a
+// wording change in one layer cannot silently drift from the other.
+export const PERSONA_ID_REQUIRED_MESSAGE = 'personaId is required';
+export const VOICE_ID_EMPTY_MESSAGE = 'voiceId must not be empty';
+export const AUDIO_URL_EMPTY_MESSAGE = 'audioUrl must not be empty';
+export const AUDIO_URL_INVALID_MESSAGE = 'audioUrl must be an https URL';
+export const VIDEO_SUBJECT_REQUIRED_MESSAGE = 'videoSubject is required for faceless generation';
+
+/** Account-ID element message, e.g. 'youtubeAccountIds must contain only non-empty strings'. */
+export function accountIdElementMessage(field: ProviderAccountIdsField): string {
+  return `${field} must contain only non-empty strings`;
+}
+
+/** Account-ID field type message, e.g. 'youtubeAccountIds must be an array of strings'. */
+export function accountIdFieldTypeMessage(field: ProviderAccountIdsField): string {
+  return `${field} must be an array of strings`;
+}
+
+export const PROVIDERS_REQUIRED_MESSAGE = 'At least one provider required';
+/** Non-array providers from untyped callers — distinct from "none given". */
+export const PROVIDERS_TYPE_MESSAGE = 'providers must be an array of provider names';
+/** Explicitly-provided but blank timezone — distinct from "omitted" (defaults to UTC). */
+export const TIMEZONE_EMPTY_MESSAGE = 'timezone must not be empty';
+export const SCHEDULED_AT_REQUIRED_MESSAGE =
+  'scheduledAt is required (ISO date time, between 24h and 30 days in the future)';
+
+/** e.g. 'audioUrl must be a string' — non-string input from untyped callers, both layers. */
+export function stringFieldMessage(field: string): string {
+  return `${field} must be a string`;
+}
+
+/** Guard for direct-client methods called with null/undefined by untyped JS callers. */
+export const INPUT_OBJECT_MESSAGE = 'input must be an object';
+
+/**
+ * Error thrown for client-side input validation failures (as opposed to
+ * network/HTTP failures, which remain plain Errors with a "Failed to..."
+ * message). Lets SDK callers distinguish a bad input — which retrying
+ * won't fix — from a transient transport failure. Extends Error, so
+ * existing `catch (e)` and `instanceof Error` handling keeps working.
+ * Lives in shared.ts (not client.ts) so assertInputObject can throw it
+ * without a circular import.
+ */
+export class ValidationError extends Error {
+  constructor(message?: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
+/**
+ * Fail-fast input-object guard for the direct client methods: untyped JS
+ * callers can pass null/undefined (or an array — `typeof [] === 'object'`),
+ * and property access below would throw a raw TypeError. Shared so both
+ * methods reject non-objects with the same message.
+ */
+export function assertInputObject<T extends object>(input: unknown): asserts input is T {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    throw new ValidationError(INPUT_OBJECT_MESSAGE);
+  }
+}
+
+/** Wrong-typed scheduledAt from direct (untyped) callers — the client accepts Date, the schema does not. */
+export const SCHEDULED_AT_TYPE_MESSAGE = 'scheduledAt must be an ISO date string or Date';
+
+/** Blank videoSubject alongside a personaId: an invalid override, not a missing faceless requirement. */
+export const VIDEO_SUBJECT_NON_EMPTY_MESSAGE =
+  'videoSubject must be a non-empty string when provided';
+
+export interface ProviderAccountIssue {
+  provider: ScheduleProvider;
+  field: ProviderAccountIdsField;
+  message: string;
+}
+
+/**
+ * The shared per-provider account-ID rule: every declared provider needs at
+ * least one account ID. Called by the schema's superRefine and by the
+ * client's fail-fast guard so the rule (and its message) cannot drift
+ * between the two layers.
+ */
+export function findProvidersMissingAccountIds(
+  providers: readonly ScheduleProvider[],
+  getAccountIds: (field: ProviderAccountIdsField) => readonly string[] | undefined
+): ProviderAccountIssue[] {
+  const issues: ProviderAccountIssue[] = [];
+  for (const provider of dedupeProviders(providers)) {
+    const field = providerAccountIdsField(provider);
+    if ((getAccountIds(field) ?? []).length === 0) {
+      issues.push({
+        provider,
+        field,
+        message: `providers includes '${provider}' but ${field} is empty`,
+      });
+    }
+  }
+  return issues;
+}
+
+/** Shared wording for the faceless voice-source rule. */
+export const FACELESS_VOICE_RULE = 'exactly one of audioUrl or voiceId';
+
+/** Normalized schedule fields for cross-field validation. */
+export interface ScheduleFields {
+  providers: ScheduleProvider[];
+  accountIds: (field: ProviderAccountIdsField) => readonly string[] | undefined;
+}
+
+/** One schedule cross-field rule violation: message plus the schema path. */
+export interface ScheduleFieldIssue {
+  path: string[];
+  message: string;
+}
+
+/**
+ * Cross-field rules for schedule creation, shared by the MCP schema's
+ * superRefine and the direct client's fail-fast guards so a rule change
+ * can't be made in one layer but not the other. Providers are already
+ * normalized (trimmed, deduped, membership-checked) when this runs. The
+ * non-empty-providers rule is intentionally not here: it's a single-field
+ * rule, so it lives on the field itself (schema min(1), which also
+ * advertises minItems, and the client's length check) with the shared
+ * PROVIDERS_REQUIRED_MESSAGE.
+ */
+export function validateScheduleFields(fields: ScheduleFields): ScheduleFieldIssue[] {
+  return findProvidersMissingAccountIds(fields.providers, fields.accountIds).map((issue) => ({
+    path: [issue.field],
+    message: issue.message,
+  }));
+}
+
+/** Full message for the faceless voice-source rule, shared with the client's fail-fast guard. */
+export const FACELESS_VOICE_MESSAGE = `Faceless generation requires ${FACELESS_VOICE_RULE} (or provide personaId)`;
+
+/**
+ * Message for the both-sources case. Kept separate from FACELESS_VOICE_MESSAGE
+ * because "(or provide personaId)" is wrong advice when both sources are
+ * already provided.
+ */
+export const FACELESS_VOICE_BOTH_MESSAGE = `Faceless generation needs ${FACELESS_VOICE_RULE}, not both`;
+
+/** Message for voiceId supplied alongside personaId, shared with the client's fail-fast guard. */
+export const PERSONA_VOICE_ID_MESSAGE =
+  'voiceId is only used for faceless generation; remove voiceId when personaId is provided';
+
+/**
+ * True when exactly one faceless voice source is provided (audioUrl xor voiceId).
+ * Shared by the schema refinement and the client's fail-fast guard so the rule
+ * cannot drift between the two.
+ */
+export function hasExactlyOneVoiceSource(audioUrl?: string, voiceId?: string): boolean {
+  return Boolean(audioUrl) !== Boolean(voiceId);
+}
+
+/**
+ * Mirrors the schema's audioUrl rule: must be a parseable https URL.
+ * Shared by the zod refinement and the client's fail-fast guard.
+ *
+ * Hardening: audioUrl is forwarded to the Post Engineer server for
+ * server-side fetching, so cleartext http:// is rejected — a
+ * man-in-the-middle on the fetch could silently substitute the audio the
+ * video renders with. This only guards the transport: the server-side
+ * fetcher must additionally refuse private/loopback address ranges, which
+ * cannot be enforced from the MCP.
+ */
+export function isValidHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/** e.g. 'Unknown provider "tiktok". Must be one of: youtube, instagram, linkedin, bluesky'. */
+export function unknownProviderMessage(provider: unknown): string {
+  return `Unknown provider ${JSON.stringify(provider)}. Must be one of: ${SCHEDULE_PROVIDER_NAMES.join(', ')}`;
+}
+
+/**
+ * Schedule-window bounds, shared by the schema chains, the direct
+ * client's fail-fast guards, and scheduleWindowMessage — a bound change
+ * touches only this object.
+ */
+export const SCHEDULE_WINDOW_BOUNDS = {
+  dayOfWeek: { min: 0, max: 6 },
+  hour: { min: 0, max: 23 },
+  postsPerDay: { min: 1, max: 10 },
+} as const;
+
+/**
+ * Fail-fast message for the optional schedule-window fields, mirroring the
+ * ScheduleVideoObject zod bounds. Bounds are interpolated from
+ * SCHEDULE_WINDOW_BOUNDS so the text can't drift from the enforced values.
+ */
+export function scheduleWindowMessage(
+  field: 'daysOfWeek' | 'startHour' | 'endHour' | 'postsPerDay'
+): string {
+  switch (field) {
+    case 'daysOfWeek': {
+      const { min, max } = SCHEDULE_WINDOW_BOUNDS.dayOfWeek;
+      return `daysOfWeek must be an array of integers between ${min} and ${max}`;
+    }
+    case 'postsPerDay': {
+      const { min, max } = SCHEDULE_WINDOW_BOUNDS.postsPerDay;
+      return `postsPerDay must be an integer between ${min} and ${max}`;
+    }
+    case 'startHour':
+    case 'endHour': {
+      const { min, max } = SCHEDULE_WINDOW_BOUNDS.hour;
+      return `${field} must be an integer between ${min} and ${max}`;
+    }
+    default: {
+      // Exhaustiveness: the compiler enforces that every field in the
+      // union has an explicit case above.
+      const _exhaustive: never = field;
+      return _exhaustive;
+    }
+  }
+}
+
+/** Trimmed video-generation fields for cross-field validation. */
+export interface GenerateVideoFields {
+  personaId?: string;
+  audioUrl?: string;
+  voiceId?: string;
+  videoSubject?: string;
+}
+
+/** One cross-field rule violation: message plus the schema path to blame. */
+export interface GenerateVideoIssue {
+  path: string[];
+  message: string;
+}
+
+/**
+ * Format validation issues identically on every surface: each issue as
+ * `path.to.field: message` (path omitted when empty), joined with '; '.
+ * Used by the direct client (thrown errors) and the MCP transport
+ * (parseArgsOrError), so both layers report the same text for the same
+ * input. Accepts zod issues too (their paths may contain numbers).
+ */
+export function formatValidationIssues(
+  issues: ReadonlyArray<{ path: ReadonlyArray<string | number>; message: string }>
+): string {
+  return issues
+    .map((issue) => [issue.path.join('.'), issue.message].filter(Boolean).join(': '))
+    .join('; ');
+}
+
+/**
+ * Cross-field rules for video generation, shared by the MCP schema's
+ * superRefine and the direct client's fail-fast guards so a rule change
+ * can't be made in one layer but not the other.
+ *
+ * Contract: values are already trimmed. A provided-but-blank videoSubject
+ * arrives as '' (blank stays blank here); other blank fields are rejected
+ * by the field-level min(1) rules before this runs, so they arrive as
+ * non-empty or undefined.
+ */
+export function validateGenerateVideoFields(fields: GenerateVideoFields): GenerateVideoIssue[] {
+  const { personaId, audioUrl, voiceId } = fields;
+  const issues: GenerateVideoIssue[] = [];
+  const issue = (path: string[], message: string): void => {
+    issues.push({ path, message });
+  };
+  if (fields.videoSubject === '') {
+    // Provided-but-blank: alongside a persona it's an invalid override, in
+    // faceless mode a missing requirement.
+    issue(
+      ['videoSubject'],
+      personaId ? VIDEO_SUBJECT_NON_EMPTY_MESSAGE : VIDEO_SUBJECT_REQUIRED_MESSAGE
+    );
+  } else if (!personaId && !fields.videoSubject) {
+    issue(['videoSubject'], VIDEO_SUBJECT_REQUIRED_MESSAGE);
+  }
+  if (!personaId && !hasExactlyOneVoiceSource(audioUrl, voiceId)) {
+    // Form-level issue (path []): the combination is wrong, not one field
+    // alone — blaming only voiceId would mislead callers.
+    issue([], audioUrl && voiceId ? FACELESS_VOICE_BOTH_MESSAGE : FACELESS_VOICE_MESSAGE);
+  }
+  if (personaId && voiceId) {
+    issue(['voiceId'], PERSONA_VOICE_ID_MESSAGE);
+  }
+  return issues;
+}

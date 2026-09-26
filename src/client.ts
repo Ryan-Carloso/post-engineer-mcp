@@ -1,4 +1,34 @@
 import { validateScheduleAdvance } from './validator.js';
+import type { ProviderAccountIdsField, ScheduleProvider } from './shared.js';
+import {
+  AUDIO_URL_EMPTY_MESSAGE,
+  AUDIO_URL_INVALID_MESSAGE,
+  assertInputObject,
+  dedupeProviders,
+  PERSONA_ID_REQUIRED_MESSAGE,
+  PROVIDERS_REQUIRED_MESSAGE,
+  PROVIDERS_TYPE_MESSAGE,
+  SCHEDULED_AT_REQUIRED_MESSAGE,
+  SCHEDULED_AT_TYPE_MESSAGE,
+  SCHEDULE_WINDOW_BOUNDS,
+  TIMEZONE_EMPTY_MESSAGE,
+  VOICE_ID_EMPTY_MESSAGE,
+  ValidationError,
+  accountIdElementMessage,
+  accountIdFieldTypeMessage,
+  buildAccountIdsMap,
+  formatValidationIssues,
+  isScheduleProvider,
+  isValidHttpsUrl,
+  scheduleWindowMessage,
+  stringFieldMessage,
+  unknownProviderMessage,
+  validateGenerateVideoFields,
+  validateScheduleFields,
+} from './shared.js';
+// Re-exported so existing `import { ValidationError } from './client.js'`
+// callers keep working after the move to shared.ts.
+export { ValidationError } from './shared.js';
 
 export interface PostEngineerClientOptions {
   apiKey?: string;
@@ -17,10 +47,19 @@ export interface CreatePersonaInput {
   faceQuality?: 'ok' | 'very_good';
 }
 
+/**
+ * Input for generating a video job. Omit personaId for faceless generation,
+ * which requires exactly one of audioUrl or voiceId (never both); the server
+ * rejects invalid combinations. voiceId is rejected when personaId is provided.
+ * Normalization is asymmetric: a blank scriptPrompt is silently dropped (sent
+ * as undefined), while a blank audioUrl, voiceId, or videoSubject throws.
+ */
 export interface GenerateVideoJobInput {
-  personaId: string;
+  personaId?: string;
   scriptPrompt?: string;
   audioUrl?: string;
+  voiceId?: string;
+  videoSubject?: string;
 }
 
 export interface UpdatePersonaInput {
@@ -35,13 +74,11 @@ export interface UpdatePersonaInput {
   niche?: string;
 }
 
-export interface CreateScheduleInput {
+export interface CreateScheduleInput extends Partial<Record<ProviderAccountIdsField, string[]>> {
   personaId: string;
-  providers: ('youtube' | 'instagram' | 'linkedin')[];
-  youtubeAccountIds?: string[];
-  instagramAccountIds?: string[];
-  linkedinAccountIds?: string[];
-  scheduledAt?: string | Date;
+  providers: ScheduleProvider[];
+  /** @breaking Required as of this release; previously optional. */
+  scheduledAt: string | Date;
   daysOfWeek?: number[];
   startHour?: number;
   endHour?: number;
@@ -51,6 +88,168 @@ export interface CreateScheduleInput {
 }
 
 const PRODUCTION_API_URL = 'https://post-engineer.com';
+
+/**
+ * Normalized schedule input: every field validated and trimmed, ready for
+ * the cross-field checks and the request payload. Produced by
+ * normalizeScheduleInput so the normalization is independently testable.
+ */
+export interface NormalizedScheduleInput {
+  personaId: string;
+  providers: ScheduleProvider[];
+  accountIds: Record<ProviderAccountIdsField, string[]>;
+  scheduledAt: string | Date;
+  timezone?: string;
+  daysOfWeek?: number[];
+  startHour?: number;
+  endHour?: number;
+  postsPerDay?: number;
+}
+
+/**
+ * Validate and normalize a CreateScheduleInput, throwing the same errors
+ * the schema reports on the MCP path. Field checks follow the schema's
+ * field order (personaId, providers, account-IDs, scheduledAt, window,
+ * timezone) so both layers report the same first error for the same input.
+ * Note: only cross-field messages are byte-identical across layers — the
+ * client throws field-level messages raw (e.g. 'personaId is required')
+ * while the MCP path prefixes them via formatValidationIssues
+ * (e.g. 'personaId: personaId is required'). Callers matching on exact
+ * error text should account for the surface.
+ */
+export function normalizeScheduleInput(input: CreateScheduleInput): NormalizedScheduleInput {
+  // Mirror generateVideoJob's hardening: a blank or non-string personaId
+  // fails fast here instead of server-side. Presence and type get
+  // separate messages — a supplied-but-wrong-typed value is not
+  // "missing" — matching the schema's invalid_type_error vs min(1).
+  if (typeof input.personaId !== 'string') {
+    throw new ValidationError(stringFieldMessage('personaId'));
+  }
+  if (input.personaId.trim() === '') {
+    throw new ValidationError(PERSONA_ID_REQUIRED_MESSAGE);
+  }
+  const personaId = input.personaId.trim();
+
+  // The shape checks below are untyped-JS-caller hardening that zod handles
+  // on the MCP path: a non-array is a type error (same message as the
+  // schema's invalid_type_error), an empty array is "none given".
+  if (!Array.isArray(input.providers)) {
+    throw new ValidationError(PROVIDERS_TYPE_MESSAGE);
+  }
+  if (input.providers.length === 0) {
+    throw new ValidationError(PROVIDERS_REQUIRED_MESSAGE);
+  }
+  // Trim provider names before the membership check: ' youtube ' is
+  // accepted, consistent with the whitespace tolerance elsewhere.
+  const providers: ScheduleProvider[] = [];
+  for (const raw of input.providers) {
+    const provider = typeof raw === 'string' ? raw.trim() : raw;
+    if (!isScheduleProvider(provider)) {
+      throw new ValidationError(unknownProviderMessage(provider));
+    }
+    providers.push(provider);
+  }
+  // Validate and normalize the account-ID fields in a single pass,
+  // mirroring the schema's array(z.string().trim().min(1)): a non-array
+  // field gets an accurate type error instead of a misleading "is
+  // empty", blank elements are rejected, and the trimmed arrays below
+  // are reused by validateScheduleFields and the payload builder — the
+  // schema likewise validates the trimmed values.
+  // Built with the shared buildAccountIdsMap factory so the per-provider
+  // map construction lives in one place (see shared.ts).
+  const accountIds = buildAccountIdsMap((field) => {
+    const ids = input[field];
+    if (ids !== undefined && !Array.isArray(ids)) {
+      throw new ValidationError(accountIdFieldTypeMessage(field));
+    }
+    const trimmed: string[] = [];
+    if (Array.isArray(ids)) {
+      for (const id of ids) {
+        if (typeof id !== 'string' || id.trim() === '') {
+          throw new ValidationError(accountIdElementMessage(field));
+        }
+        trimmed.push(id.trim());
+      }
+    }
+    return trimmed;
+  });
+  // scheduledAt is required by the MCP schema (z.string(), no default):
+  // fail fast here instead of failing server-side with an opaque error.
+  // Normalized before validating: new Date() rejects padded ISO strings,
+  // so trim first and validate/send the trimmed value. Presence and type
+  // get separate messages — a supplied-but-wrong-typed value is not
+  // "missing".
+  const scheduledAt =
+    typeof input.scheduledAt === 'string' ? input.scheduledAt.trim() : input.scheduledAt;
+  if (scheduledAt === undefined || scheduledAt === '') {
+    throw new ValidationError(SCHEDULED_AT_REQUIRED_MESSAGE);
+  }
+  // null is a supplied-but-wrong-typed value, not a missing one — it gets
+  // the type message, matching the schema's invalid_type_error.
+  if (typeof scheduledAt !== 'string' && !(scheduledAt instanceof Date)) {
+    throw new ValidationError(SCHEDULED_AT_TYPE_MESSAGE);
+  }
+  // Fail-fast guards for the optional schedule-window fields, mirroring
+  // the ScheduleVideoObject zod bounds: untyped JS callers get a clear
+  // error here instead of an opaque server-side rejection. Bounds come
+  // from SCHEDULE_WINDOW_BOUNDS, shared with the schema chains.
+  const assertWindowInteger = (
+    field: 'startHour' | 'endHour' | 'postsPerDay',
+    value: unknown
+  ): void => {
+    if (value === undefined) {
+      return;
+    }
+    const { min, max } =
+      field === 'postsPerDay' ? SCHEDULE_WINDOW_BOUNDS.postsPerDay : SCHEDULE_WINDOW_BOUNDS.hour;
+    // Intentional: a wrong-typed value (e.g. a string) is reported with
+    // the bounds message, not a distinct type message. The zod schema
+    // does the same (invalid_type_error is scheduleWindowMessage), so
+    // both layers stay in agreement; unlike the string fields, these
+    // numeric fields never had a separate type wording.
+    const n = typeof value === 'number' ? value : NaN;
+    if (!Number.isInteger(n) || n < min || n > max) {
+      throw new ValidationError(scheduleWindowMessage(field));
+    }
+  };
+  if (input.daysOfWeek !== undefined) {
+    const { min, max } = SCHEDULE_WINDOW_BOUNDS.dayOfWeek;
+    const validDays =
+      Array.isArray(input.daysOfWeek) &&
+      input.daysOfWeek.every((day) => Number.isInteger(day) && day >= min && day <= max);
+    if (!validDays) {
+      throw new ValidationError(scheduleWindowMessage('daysOfWeek'));
+    }
+  }
+  assertWindowInteger('startHour', input.startHour);
+  assertWindowInteger('endHour', input.endHour);
+  assertWindowInteger('postsPerDay', input.postsPerDay);
+  // Trimmed like every other string field here: a padded value (' UTC ')
+  // is normalized, and an explicit blank is rejected rather than
+  // silently disabling the 'UTC' default.
+  if (input.timezone !== undefined && typeof input.timezone !== 'string') {
+    throw new ValidationError(stringFieldMessage('timezone'));
+  }
+  const timezone = input.timezone?.trim();
+  if (timezone === '') {
+    throw new ValidationError(TIMEZONE_EMPTY_MESSAGE);
+  }
+
+  return {
+    personaId,
+    // Dedupe here (not just at the payload use-site) so the normalized
+    // output is self-consistent: any consumer of normalized.providers
+    // sees the same value that is actually sent.
+    providers: dedupeProviders(providers),
+    accountIds,
+    scheduledAt,
+    timezone,
+    daysOfWeek: input.daysOfWeek,
+    startHour: input.startHour,
+    endHour: input.endHour,
+    postsPerDay: input.postsPerDay,
+  };
+}
 
 export class PostEngineerClient {
   private readonly baseUrl: string;
@@ -279,14 +478,87 @@ export class PostEngineerClient {
   }
 
   async generateVideoJob(input: GenerateVideoJobInput): Promise<unknown> {
+    // Untyped JS callers can pass null/undefined (or an array): property
+    // access below would throw a raw TypeError, so guard the input itself
+    // first.
+    assertInputObject<GenerateVideoJobInput>(input);
+    // Fail fast for direct (non-MCP) callers, mirroring the MCP schema rules.
+    // Single source of truth for the string fields: the type-guard loop and
+    // the normalize step read the same object, so a future field can't be
+    // added to one but not the other — a missed field would let a non-string
+    // slip through instead of erroring.
+    const rawFields = {
+      personaId: input.personaId,
+      scriptPrompt: input.scriptPrompt,
+      audioUrl: input.audioUrl,
+      voiceId: input.voiceId,
+      videoSubject: input.videoSubject,
+    };
+    for (const [name, value] of Object.entries(rawFields)) {
+      if (value !== undefined && typeof value !== 'string') {
+        throw new ValidationError(stringFieldMessage(name));
+      }
+    }
+    // Normalize once, then validate the normalized values. Blank stays ''
+    // here (not coerced to undefined) so the checks below can distinguish
+    // "provided but blank" from "omitted".
+    const trimKeepBlank = (value: string | undefined): string | undefined => value?.trim();
+    const personaId = trimKeepBlank(rawFields.personaId);
+    const scriptPrompt = trimKeepBlank(rawFields.scriptPrompt);
+    const audioUrl = trimKeepBlank(rawFields.audioUrl);
+    const voiceId = trimKeepBlank(rawFields.voiceId);
+    const videoSubject = trimKeepBlank(rawFields.videoSubject);
+    // Field-level blank checks, mirroring the schema's min(1) field rules: a
+    // blank personaId must be rejected, not normalized to undefined —
+    // normalizing would silently flip the call to faceless mode.
+    if (personaId === '') {
+      throw new ValidationError(PERSONA_ID_REQUIRED_MESSAGE);
+    }
+    // audioUrl before voiceId, matching GenerateVideoObject's field order
+    // (personaId, scriptPrompt, audioUrl, voiceId, videoSubject) so both
+    // layers report the same first error for the same input.
+    if (audioUrl === '') {
+      throw new ValidationError(AUDIO_URL_EMPTY_MESSAGE);
+    }
+    if (voiceId === '') {
+      throw new ValidationError(VOICE_ID_EMPTY_MESSAGE);
+    }
+    // Field-level URL check runs before the cross-field rules, mirroring the
+    // schema: its refine runs during object parsing, before superRefine. An
+    // input violating both reports the same messages in the same order on
+    // both paths.
+    if (audioUrl && !isValidHttpsUrl(audioUrl)) {
+      throw new ValidationError(AUDIO_URL_INVALID_MESSAGE);
+    }
+    // Cross-field rules are shared with the MCP schema
+    // (validateGenerateVideoFields) so the layers can't diverge; every
+    // applicable issue is reported at once, like the schema's superRefine.
+    const issues = validateGenerateVideoFields({ personaId, audioUrl, voiceId, videoSubject });
+    if (issues.length > 0) {
+      // Same formatting as the MCP transport (parseArgsOrError), so both
+      // layers report the same text for the same input.
+      throw new ValidationError(formatValidationIssues(issues));
+    }
     const url = `${this.baseUrl}/api/persona/video-job`;
     const response = await fetch(url, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({
-        personaId: input.personaId,
-        video_script_prompt: input.scriptPrompt,
-        audio_url: input.audioUrl,
+        personaId,
+        // A blank scriptPrompt normalizes to undefined (dropped), not an
+        // error: unlike the validated fields above, an empty override is
+        // meaningless rather than invalid. videoSubject is guaranteed
+        // non-empty here because validateGenerateVideoFields (see the
+        // `issues` check above) throws on a blank videoSubject for both
+        // persona and faceless inputs; if that rule ever stops rejecting
+        // blanks, this payload line must gain its own guard.
+        video_script_prompt: scriptPrompt === '' ? undefined : scriptPrompt,
+        audio_url: audioUrl,
+        // Guarded above: voiceId is only present for faceless generation.
+        voice_id: voiceId,
+        // Defensive: the shared validator rejects blank videoSubject, but
+        // don't let a future rule relaxation send '' to the server.
+        video_subject: videoSubject === '' ? undefined : videoSubject,
       }),
     });
 
@@ -314,29 +586,52 @@ export class PostEngineerClient {
   }
 
   async createSchedule(input: CreateScheduleInput): Promise<unknown> {
-    if (input.scheduledAt) {
-      const validation = validateScheduleAdvance(input.scheduledAt, input._nowForTesting);
-      if (!validation.isValid) {
-        throw new Error(validation.error);
-      }
+    // Same guard as generateVideoJob: fail with a clear message instead of
+    // a raw TypeError on the first property access.
+    assertInputObject<CreateScheduleInput>(input);
+    const normalized = normalizeScheduleInput(input);
+    const { personaId, providers, accountIds, scheduledAt, timezone } = normalized;
+
+    const missingAccountIds = validateScheduleFields({
+      providers,
+      accountIds: (field) => accountIds[field],
+    });
+    if (missingAccountIds.length > 0) {
+      // Report every missing provider at once, like the schema's superRefine,
+      // so callers don't fix one error at a time. Same formatting as the MCP
+      // transport (parseArgsOrError).
+      throw new ValidationError(formatValidationIssues(missingAccountIds));
+    }
+    // Advance-window check runs after the field and cross-field rules,
+    // matching the MCP path where the schema validates first and the
+    // handler's client call checks the window — so both layers report
+    // the same first error for the same input.
+    const scheduledAtValidation = validateScheduleAdvance(scheduledAt, input._nowForTesting);
+    if (!scheduledAtValidation.isValid) {
+      throw new ValidationError(scheduledAtValidation.error);
     }
 
     const url = `${this.baseUrl}/api/schedule`;
+    // Account-ID fields were validated and trimmed in the single pass
+    // above; spreading them here keeps every provider present in the
+    // payload so a new provider cannot be silently dropped.
     const response = await fetch(url, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({
-        personaId: input.personaId,
-        providers: input.providers,
-        youtubeAccountIds: input.youtubeAccountIds ?? [],
-        instagramAccountIds: input.instagramAccountIds ?? [],
-        linkedinAccountIds: input.linkedinAccountIds ?? [],
-        scheduledAt: input.scheduledAt,
-        daysOfWeek: input.daysOfWeek,
-        startHour: input.startHour,
-        endHour: input.endHour,
-        postsPerDay: input.postsPerDay,
-        timezone: input.timezone ?? 'UTC',
+        personaId,
+        // Already deduped by normalizeScheduleInput (matching the MCP path's
+        // ScheduleProvidersSchema preprocess), so both layers send each
+        // provider once. Only known account-ID fields are spread below, so
+        // extraneous keys from untyped callers never reach the request body.
+        providers,
+        ...accountIds,
+        scheduledAt,
+        daysOfWeek: normalized.daysOfWeek,
+        startHour: normalized.startHour,
+        endHour: normalized.endHour,
+        postsPerDay: normalized.postsPerDay,
+        timezone: timezone ?? 'UTC',
       }),
     });
 
