@@ -9,6 +9,13 @@ export const SCHEDULE_PROVIDER_NAMES = ['youtube', 'instagram', 'linkedin', 'blu
 export type ScheduleProvider = (typeof SCHEDULE_PROVIDER_NAMES)[number];
 
 /**
+ * Providers that connect directly with credentials (not via OAuth URL).
+ * Used to derive the connect_account tool description so it can't drift
+ * from the provider set.
+ */
+export const DIRECT_CONNECT_PROVIDERS: readonly ScheduleProvider[] = ['bluesky'];
+
+/**
  * Dedupe a provider list, preserving first-seen order. Shared by the
  * schema preprocess, the direct client's payload builder, and the
  * missing-account-ID check so the rule lives in one place.

@@ -777,6 +777,37 @@ describe('PostEngineerClient', () => {
     expect(payload.providers).toEqual(['youtube']);
   });
 
+  it('sends all four account-ID fields (empty arrays for undeclared providers)', async () => {
+    // Regression test: the payload always includes every provider's
+    // account-ID field. The web /api/schedule route only enforces account
+    // IDs for declared providers and accepts empty arrays for the rest
+    // (verified against the PR #64 web implementation) — pin the shape so
+    // a future change can't silently drop or add keys.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true }),
+    });
+
+    const now = new Date('2026-09-18T09:00:00.000Z');
+    const validTime = new Date('2026-09-20T10:00:00.000Z').toISOString();
+
+    await client.createSchedule({
+      personaId: 'persona-123',
+      providers: ['youtube'],
+      youtubeAccountIds: ['yt-1'],
+      scheduledAt: validTime,
+      _nowForTesting: now,
+    });
+
+    const fetchBody = vi.mocked(global.fetch).mock.calls[0][1] as { body: string };
+    const payload = JSON.parse(fetchBody.body);
+    expect(payload.youtubeAccountIds).toEqual(['yt-1']);
+    expect(payload.instagramAccountIds).toEqual([]);
+    expect(payload.linkedinAccountIds).toEqual([]);
+    expect(payload.blueskyAccountIds).toEqual([]);
+  });
+
   it('rejects invalid schedule-window fields without calling API', async () => {
     global.fetch = vi.fn();
     const now = new Date('2026-09-18T09:00:00.000Z');

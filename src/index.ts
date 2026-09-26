@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { PostEngineerClient } from './client.js';
-import { SCHEDULE_PROVIDER_NAMES, providerDisplayName } from './shared.js';
+import { DIRECT_CONNECT_PROVIDERS, SCHEDULE_PROVIDER_NAMES, providerDisplayName } from './shared.js';
 import {
   handleCreatePersona,
   handleListPersonas,
@@ -108,9 +108,13 @@ export function createPostEngineerMcpServer(client?: PostEngineerClient): McpSer
 
   server.tool(
     'connect_account',
-    `Connect a social account. For ${SCHEDULE_PROVIDER_NAMES.filter((p) => p !== 'bluesky')
+    `Connect a social account. For ${SCHEDULE_PROVIDER_NAMES.filter(
+      (p) => !DIRECT_CONNECT_PROVIDERS.includes(p)
+    )
       .map(providerDisplayName)
-      .join('/')}: returns an authorization URL — the user must open it in a browser and authorize, then the account connects automatically (verify with list_social_accounts). For Bluesky: connects directly with handle + appPassword (app password, not the main account password).`,
+      .join('/')}: returns an authorization URL — the user must open it in a browser and authorize, then the account connects automatically (verify with list_social_accounts). For ${DIRECT_CONNECT_PROVIDERS.map(
+      providerDisplayName
+    ).join('/')}: connects directly with handle + appPassword (app password, not the main account password).`,
     {
       provider: z.enum(SCHEDULE_PROVIDER_NAMES).describe('The social platform to connect'),
       handle: z.string().min(1).optional().describe('Bluesky handle (e.g. user.bsky.social). Required only for bluesky.'),

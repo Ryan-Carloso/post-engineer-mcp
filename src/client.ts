@@ -558,7 +558,7 @@ export class PostEngineerClient {
         voice_id: voiceId,
         // Defensive: the shared validator rejects blank videoSubject, but
         // don't let a future rule relaxation send '' to the server.
-        video_subject: videoSubject || undefined,
+        video_subject: videoSubject === '' ? undefined : videoSubject,
       }),
     });
 
@@ -620,11 +620,11 @@ export class PostEngineerClient {
       headers: this.getHeaders(),
       body: JSON.stringify({
         personaId,
-        // Deduplicated: the MCP path's ScheduleProvidersSchema preprocess also
-        // dedupes, so both layers send each provider once. Only known
-        // account-ID fields are spread above, so extraneous keys from
-        // untyped callers never reach the request body.
-        providers: dedupeProviders(providers),
+        // Already deduped by normalizeScheduleInput (matching the MCP path's
+        // ScheduleProvidersSchema preprocess), so both layers send each
+        // provider once. Only known account-ID fields are spread below, so
+        // extraneous keys from untyped callers never reach the request body.
+        providers,
         ...accountIds,
         scheduledAt,
         daysOfWeek: normalized.daysOfWeek,
