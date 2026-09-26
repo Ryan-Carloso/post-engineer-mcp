@@ -78,6 +78,7 @@ export interface UpdatePersonaInput {
 export interface CreateScheduleInput extends Partial<Record<ProviderAccountIdsField, string[]>> {
   personaId: string;
   providers: ScheduleProvider[];
+  /** @breaking Required as of this release; previously optional. */
   scheduledAt: string | Date;
   daysOfWeek?: number[];
   startHour?: number;
@@ -541,10 +542,10 @@ export class PostEngineerClient {
         // A blank scriptPrompt normalizes to undefined (dropped), not an
         // error: unlike the validated fields above, an empty override is
         // meaningless rather than invalid. videoSubject is guaranteed
-        // non-empty here because validateGenerateVideoFields throws on a
-        // blank videoSubject for both persona and faceless inputs (see the
-        // VIDEO_SUBJECT_REQUIRED checks above); if that rule ever stops
-        // rejecting blanks, this payload line must gain its own guard.
+        // non-empty here because validateGenerateVideoFields (see the
+        // `issues` check above) throws on a blank videoSubject for both
+        // persona and faceless inputs; if that rule ever stops rejecting
+        // blanks, this payload line must gain its own guard.
         video_script_prompt: scriptPrompt === '' ? undefined : scriptPrompt,
         audio_url: audioUrl,
         // Guarded above: voiceId is only present for faceless generation.
