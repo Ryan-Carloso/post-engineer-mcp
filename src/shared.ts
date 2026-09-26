@@ -78,12 +78,6 @@ export function stringFieldMessage(field: string): string {
 export const INPUT_OBJECT_MESSAGE = 'input must be an object';
 
 /**
- * Fail-fast input-object guard for the direct client methods: untyped JS
- * callers can pass null/undefined (or an array — `typeof [] === 'object'`),
- * and property access below would throw a raw TypeError. Shared so both
- * methods reject non-objects with the same message.
- */
-/**
  * Error thrown for client-side input validation failures (as opposed to
  * network/HTTP failures, which remain plain Errors with a "Failed to..."
  * message). Lets SDK callers distinguish a bad input — which retrying
@@ -99,6 +93,12 @@ export class ValidationError extends Error {
   }
 }
 
+/**
+ * Fail-fast input-object guard for the direct client methods: untyped JS
+ * callers can pass null/undefined (or an array — `typeof [] === 'object'`),
+ * and property access below would throw a raw TypeError. Shared so both
+ * methods reject non-objects with the same message.
+ */
 export function assertInputObject<T extends object>(input: unknown): asserts input is T {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
     throw new ValidationError(INPUT_OBJECT_MESSAGE);
