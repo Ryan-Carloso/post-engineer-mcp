@@ -18,7 +18,7 @@ import {
   accountIdFieldTypeMessage,
   formatValidationIssues,
   isValidHttpUrl,
-  providerAccountIdsField,
+  buildAccountIdsMap,
   scheduleWindowMessage,
   stringFieldMessage,
   unknownProviderMessage,
@@ -225,18 +225,9 @@ const accountIdFieldSchema = (field: ProviderAccountIdsField) =>
     .default([]);
 
 // Generated from SCHEDULE_PROVIDER_NAMES so a new provider is added in one
-// place. Built with indexed assignment (not Object.fromEntries) so the
-// literal field keys survive in the type — fromEntries would widen to
-// {[k: string]: ...} and weaken every downstream type. The value type is
-// the precise schema type (not z.ZodTypeAny): using ZodTypeAny would
-// collapse the inferred field types to `any`, silently defeating the
-// shared helper contracts and the repo's no-explicit-any rule.
-type AccountIdFieldSchema = ReturnType<typeof accountIdFieldSchema>;
-const accountIdsShape = {} as Record<ProviderAccountIdsField, AccountIdFieldSchema>;
-for (const provider of SCHEDULE_PROVIDER_NAMES) {
-  const field = providerAccountIdsField(provider);
-  accountIdsShape[field] = accountIdFieldSchema(field);
-}
+// place. Uses the shared buildAccountIdsMap factory so the per-provider
+// map construction (and its cast soundness) lives in one location.
+const accountIdsShape = buildAccountIdsMap((field) => accountIdFieldSchema(field));
 
 export const ScheduleVideoObject = z.object({
   // required_error mirrors the direct client, which throws the type message

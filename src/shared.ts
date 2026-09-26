@@ -24,6 +24,24 @@ export function providerAccountIdsField(provider: ScheduleProvider): ProviderAcc
   return `${provider}AccountIds`;
 }
 
+/**
+ * Build a per-provider account-ID map in one place. The `as` cast is sound:
+ * the loop iterates every SCHEDULE_PROVIDER_NAMES entry, so every
+ * ProviderAccountIdsField key is assigned. Both the MCP schema builder
+ * (tools.ts) and the direct-client normalizer (client.ts) use this so the
+ * cast's soundness is guaranteed in a single location.
+ */
+export function buildAccountIdsMap<T>(
+  makeValue: (field: ProviderAccountIdsField) => T
+): Record<ProviderAccountIdsField, T> {
+  const map = {} as Record<ProviderAccountIdsField, T>;
+  for (const provider of SCHEDULE_PROVIDER_NAMES) {
+    const field = providerAccountIdsField(provider);
+    map[field] = makeValue(field);
+  }
+  return map;
+}
+
 /** Human-readable provider label with brand-correct casing, shown to LLM callers. */
 const PROVIDER_DISPLAY_NAMES: Record<ScheduleProvider, string> = {
   youtube: 'YouTube',

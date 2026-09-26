@@ -12,15 +12,14 @@ import {
   SCHEDULED_AT_TYPE_MESSAGE,
   SCHEDULE_WINDOW_BOUNDS,
   TIMEZONE_EMPTY_MESSAGE,
-  SCHEDULE_PROVIDER_NAMES,
   VOICE_ID_EMPTY_MESSAGE,
   ValidationError,
   accountIdElementMessage,
   accountIdFieldTypeMessage,
+  buildAccountIdsMap,
   formatValidationIssues,
   isScheduleProvider,
   isValidHttpUrl,
-  providerAccountIdsField,
   scheduleWindowMessage,
   stringFieldMessage,
   unknownProviderMessage,
@@ -150,11 +149,10 @@ export function normalizeScheduleInput(input: CreateScheduleInput): NormalizedSc
   // field gets an accurate type error instead of a misleading "is
   // empty", blank elements are rejected, and the trimmed arrays below
   // are reused by validateScheduleFields and the payload builder — the
-  // schema likewise validates the trimmed values. The `as` cast is
-  // sound: the loop assigns every SCHEDULE_PROVIDER_NAMES-derived field.
-  const accountIds = {} as Record<ProviderAccountIdsField, string[]>;
-  for (const provider of SCHEDULE_PROVIDER_NAMES) {
-    const field = providerAccountIdsField(provider);
+  // schema likewise validates the trimmed values.
+  // Built with the shared buildAccountIdsMap factory so the per-provider
+  // map construction lives in one place (see shared.ts).
+  const accountIds = buildAccountIdsMap((field) => {
     const ids = input[field];
     if (ids !== undefined && !Array.isArray(ids)) {
       throw new ValidationError(accountIdFieldTypeMessage(field));
@@ -168,8 +166,8 @@ export function normalizeScheduleInput(input: CreateScheduleInput): NormalizedSc
         trimmed.push(id.trim());
       }
     }
-    accountIds[field] = trimmed;
-  }
+    return trimmed;
+  });
   // scheduledAt is required by the MCP schema (z.string(), no default):
   // fail fast here instead of failing server-side with an opaque error.
   // Normalized before validating: new Date() rejects padded ISO strings,
