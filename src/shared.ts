@@ -243,9 +243,16 @@ export function scheduleWindowMessage(
       const { min, max } = SCHEDULE_WINDOW_BOUNDS.postsPerDay;
       return `postsPerDay must be an integer between ${min} and ${max}`;
     }
-    default: {
+    case 'startHour':
+    case 'endHour': {
       const { min, max } = SCHEDULE_WINDOW_BOUNDS.hour;
       return `${field} must be an integer between ${min} and ${max}`;
+    }
+    default: {
+      // Exhaustiveness: the compiler enforces that every field in the
+      // union has an explicit case above.
+      const _exhaustive: never = field;
+      return _exhaustive;
     }
   }
 }

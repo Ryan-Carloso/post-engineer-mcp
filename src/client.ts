@@ -170,6 +170,14 @@ export function normalizeScheduleInput(input: CreateScheduleInput): NormalizedSc
     }
     accountIds[field] = trimmed;
   }
+  // The `as` cast trusts the loop above; verify so a future refactor that
+  // filters or branches inside the loop fails loudly instead of leaving
+  // a field undefined.
+  for (const field of SCHEDULE_PROVIDER_NAMES.map(providerAccountIdsField)) {
+    if (accountIds[field] === undefined) {
+      throw new ValidationError(`accountIds is missing ${field}`);
+    }
+  }
   // scheduledAt is required by the MCP schema (z.string(), no default):
   // fail fast here instead of failing server-side with an opaque error.
   // Normalized before validating: new Date() rejects padded ISO strings,
