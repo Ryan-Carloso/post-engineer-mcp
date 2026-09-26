@@ -8,6 +8,15 @@
 export const SCHEDULE_PROVIDER_NAMES = ['youtube', 'instagram', 'linkedin', 'bluesky'] as const;
 export type ScheduleProvider = (typeof SCHEDULE_PROVIDER_NAMES)[number];
 
+/**
+ * Dedupe a provider list, preserving first-seen order. Shared by the
+ * schema preprocess, the direct client's payload builder, and the
+ * missing-account-ID check so the rule lives in one place.
+ */
+export function dedupeProviders<T>(providers: readonly T[]): T[] {
+  return [...new Set(providers)];
+}
+
 /** Account-ID field name for a provider, e.g. 'youtube' -> 'youtubeAccountIds'. */
 export type ProviderAccountIdsField = `${ScheduleProvider}AccountIds`;
 
@@ -104,7 +113,7 @@ export function findProvidersMissingAccountIds(
   getAccountIds: (field: ProviderAccountIdsField) => readonly string[] | undefined
 ): ProviderAccountIssue[] {
   const issues: ProviderAccountIssue[] = [];
-  for (const provider of new Set(providers)) {
+  for (const provider of dedupeProviders(providers)) {
     const field = providerAccountIdsField(provider);
     if ((getAccountIds(field) ?? []).length === 0) {
       issues.push({

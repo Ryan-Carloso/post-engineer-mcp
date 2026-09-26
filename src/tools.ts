@@ -13,6 +13,7 @@ import {
   TIMEZONE_EMPTY_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
   VOICE_ID_EMPTY_MESSAGE,
+  dedupeProviders,
   accountIdElementMessage,
   accountIdFieldTypeMessage,
   formatValidationIssues,
@@ -147,9 +148,14 @@ export const GenerateVideoSchema = GenerateVideoObject.superRefine((val, ctx) =>
   // schema must not add cross-field issues on top of a field-level
   // failure — otherwise MCP callers see extra, misleading issues for the
   // same input (e.g. "videoSubject is required" for a request whose real
-  // problem is a blank personaId). The flag is derived by re-running the
-  // base object's field chains instead of mirroring them by hand, so the
-  // field chains stay the single source of truth.
+  // problem is a blank personaId). Note: zod v3 DOES run superRefine when
+  // field-level validation fails (val carries the failed values), so this
+  // guard is load-bearing, not dead code — removing it reintroduces the
+  // stacked issues (see the field-failure parity tests). The flag is
+  // derived by re-running the base object's field chains instead of
+  // mirroring them by hand, so the field chains stay the single source
+  // of truth; the re-parse costs microseconds on a network-bound tool
+  // call.
   if (!GenerateVideoObject.safeParse(val).success) {
     return;
   }
@@ -177,7 +183,7 @@ export const ScheduleProvidersSchema = z.preprocess(
   // advertised JSON Schema as a plain enum array.
   (value) =>
     Array.isArray(value)
-      ? [...new Set(value.map((item) => (typeof item === 'string' ? item.trim() : item)))]
+      ? dedupeProviders(value.map((item) => (typeof item === 'string' ? item.trim() : item)))
       : value,
   z
     .array(
@@ -192,8 +198,11 @@ export const ScheduleProvidersSchema = z.preprocess(
         }),
       }),
       // Same wording as the direct client's non-array guard, so both layers
-      // report the same message for the same input.
-      { invalid_type_error: PROVIDERS_TYPE_MESSAGE }
+      // report the same message for the same input. required_error covers
+      // an omitted field (zod only uses invalid_type_error for present but
+      // wrong-typed values); the client likewise throws the type message
+      // for a non-array providers input.
+      { invalid_type_error: PROVIDERS_TYPE_MESSAGE, required_error: PROVIDERS_TYPE_MESSAGE }
     )
     .min(1, PROVIDERS_REQUIRED_MESSAGE)
 );
@@ -233,14 +242,16 @@ for (const provider of SCHEDULE_PROVIDER_NAMES) {
 }
 
 export const ScheduleVideoObject = z.object({
-  personaId: z.string({ invalid_type_error: stringFieldMessage('personaId') }).trim().min(1, PERSONA_ID_REQUIRED_MESSAGE),
+  // required_error mirrors the direct client, which throws the type message
+  // (not a presence message) for an omitted personaId.
+  personaId: z.string({ invalid_type_error: stringFieldMessage('personaId'), required_error: stringFieldMessage('personaId') }).trim().min(1, PERSONA_ID_REQUIRED_MESSAGE),
   providers: ScheduleProvidersSchema.describe('Target social platforms'),
   ...accountIdsShape,
   // Wrong-typed scheduledAt reports the client's type message (not the
   // string-only wording): the MCP transport serializes to JSON, so a Date
   // never reaches this chain in practice, and both layers name the same
   // accepted shapes.
-  scheduledAt: z.string({ invalid_type_error: SCHEDULED_AT_TYPE_MESSAGE }).trim().min(1, SCHEDULED_AT_REQUIRED_MESSAGE).describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
+  scheduledAt: z.string({ invalid_type_error: SCHEDULED_AT_TYPE_MESSAGE, required_error: SCHEDULED_AT_REQUIRED_MESSAGE }).trim().min(1, SCHEDULED_AT_REQUIRED_MESSAGE).describe('Target ISO date time for scheduling. Must be between 24h and 30 days in the future.'),
   // Window bounds and messages are shared with the direct client's
   // fail-fast guards (SCHEDULE_WINDOW_BOUNDS / scheduleWindowMessage), so
   // both layers enforce and report the same values.

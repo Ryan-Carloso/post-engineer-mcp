@@ -265,6 +265,38 @@ describe('MCP Tool Handlers', () => {
       ).toThrow(/timezone must be a string/i);
     });
 
+    it('reports an omitted providers field with the type message, matching the direct client', () => {
+      const { providers: _omit, ...rest } = {
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      };
+      expect(() => ScheduleVideoSchema.parse(rest)).toThrow(
+        /providers must be an array of provider names/i
+      );
+    });
+
+    it('reports an omitted scheduledAt with the required message, matching the direct client', () => {
+      const { scheduledAt: _omit, ...rest } = {
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      };
+      expect(() => ScheduleVideoSchema.parse(rest)).toThrow(/scheduledAt is required/i);
+    });
+
+    it('reports an omitted personaId with the type message, matching the direct client', () => {
+      const { personaId: _omit, ...rest } = {
+        personaId: 'persona-123',
+        providers: ['youtube'],
+        youtubeAccountIds: ['yt-1'],
+        scheduledAt: '2026-10-01T10:00:00.000Z',
+      };
+      expect(() => ScheduleVideoSchema.parse(rest)).toThrow(/personaId must be a string/i);
+    });
+
     it('reports a non-array account-ID field with the shared message, not zod’s default', () => {
       expect(() =>
         ScheduleVideoSchema.parse({

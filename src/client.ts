@@ -4,6 +4,7 @@ import {
   AUDIO_URL_EMPTY_MESSAGE,
   AUDIO_URL_INVALID_MESSAGE,
   assertInputObject,
+  dedupeProviders,
   PERSONA_ID_REQUIRED_MESSAGE,
   PROVIDERS_REQUIRED_MESSAGE,
   PROVIDERS_TYPE_MESSAGE,
@@ -566,7 +567,7 @@ export class PostEngineerClient {
         // dedupes, so both layers send each provider once. Only known
         // account-ID fields are spread above, so extraneous keys from
         // untyped callers never reach the request body.
-        providers: [...new Set(providers)],
+        providers: dedupeProviders(providers),
         ...accountIds,
         scheduledAt,
         daysOfWeek: input.daysOfWeek,
