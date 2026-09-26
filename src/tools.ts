@@ -63,7 +63,7 @@ export const UpdatePersonaSchema = z.object({
 export const ListSocialAccountsSchema = z.object({});
 
 export const ConnectAccountSchema = z.object({
-  provider: z.enum(['youtube', 'instagram', 'linkedin', 'bluesky']),
+  provider: z.enum(SCHEDULE_PROVIDER_NAMES),
   handle: z.string().min(1).optional(),
   appPassword: z.string().min(1).optional(),
 });
@@ -227,15 +227,12 @@ const accountIdFieldSchema = (field: ProviderAccountIdsField) =>
 // Generated from SCHEDULE_PROVIDER_NAMES so a new provider is added in one
 // place. Built with indexed assignment (not Object.fromEntries) so the
 // literal field keys survive in the type — fromEntries would widen to
-// {[k: string]: ...} and weaken every downstream type. The `as` cast is sound:
-// the loop below iterates every SCHEDULE_PROVIDER_NAMES entry and the field
-// names are derived (providerAccountIdsField), not hand-written, so there is
-// no field to misspell or omit — completeness follows from the single
-// source of truth.
-const accountIdsShape: Record<ProviderAccountIdsField, z.ZodTypeAny> = {} as Record<
-  ProviderAccountIdsField,
-  z.ZodTypeAny
->;
+// {[k: string]: ...} and weaken every downstream type. The value type is
+// the precise schema type (not z.ZodTypeAny): using ZodTypeAny would
+// collapse the inferred field types to `any`, silently defeating the
+// shared helper contracts and the repo's no-explicit-any rule.
+type AccountIdFieldSchema = ReturnType<typeof accountIdFieldSchema>;
+const accountIdsShape = {} as Record<ProviderAccountIdsField, AccountIdFieldSchema>;
 for (const provider of SCHEDULE_PROVIDER_NAMES) {
   const field = providerAccountIdsField(provider);
   accountIdsShape[field] = accountIdFieldSchema(field);
