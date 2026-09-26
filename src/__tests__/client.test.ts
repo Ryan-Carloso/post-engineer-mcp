@@ -1396,4 +1396,14 @@ describe('ValidationError', () => {
     expect(error).not.toBeInstanceOf(ValidationError);
     expect(error.message).toMatch(/Failed to create schedule: 500/);
   });
+
+  it('throws ValidationError for a non-object input', async () => {
+    global.fetch = vi.fn();
+    const error = await client
+      .createSchedule('not-an-object' as unknown as CreateScheduleInput)
+      .catch((e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(ValidationError);
+    expect(error.name).toBe('ValidationError');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
 });

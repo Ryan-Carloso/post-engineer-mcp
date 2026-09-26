@@ -14,6 +14,7 @@ import {
   TIMEZONE_EMPTY_MESSAGE,
   SCHEDULE_PROVIDER_NAMES,
   VOICE_ID_EMPTY_MESSAGE,
+  ValidationError,
   accountIdElementMessage,
   accountIdFieldTypeMessage,
   formatValidationIssues,
@@ -26,6 +27,9 @@ import {
   validateGenerateVideoFields,
   validateScheduleFields,
 } from './shared.js';
+// Re-exported so existing `import { ValidationError } from './client.js'`
+// callers keep working after the move to shared.ts.
+export { ValidationError } from './shared.js';
 
 export interface PostEngineerClientOptions {
   apiKey?: string;
@@ -84,20 +88,6 @@ export interface CreateScheduleInput extends Partial<Record<ProviderAccountIdsFi
 }
 
 const PRODUCTION_API_URL = 'https://post-engineer.com';
-
-/**
- * Error thrown for client-side input validation failures (as opposed to
- * network/HTTP failures, which remain plain Errors with a "Failed to..."
- * message). Lets SDK callers distinguish a bad input — which retrying
- * won't fix — from a transient transport failure. Extends Error, so
- * existing `catch (e)` and `instanceof Error` handling keeps working.
- */
-export class ValidationError extends Error {
-  constructor(message?: string) {
-    super(message);
-    this.name = 'ValidationError';
-  }
-}
 
 /**
  * Normalized schedule input: every field validated and trimmed, ready for
@@ -585,7 +575,6 @@ export class PostEngineerClient {
 
     return response.json();
   }
-
 
   async createSchedule(input: CreateScheduleInput): Promise<unknown> {
     // Same guard as generateVideoJob: fail with a clear message instead of
