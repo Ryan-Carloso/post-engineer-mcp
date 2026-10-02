@@ -38,7 +38,7 @@ Configure your agent (`opencode.json`, `claude_desktop_config.json`, `.mcp.json`
 
 Replace `<MY_API_KEY>` with the key you generated on https://post-engineer.com/api-keys. No repository clone or local build is required.
 
-> The `@latest` tag matters: `npx` caches the package on first run and reuses the cached copy on later runs without checking for updates. Without `@latest` you can stay stuck on an old version (e.g. pre-1.12.0 tools that no longer exist server-side) with no error telling you why.
+> The `@latest` tag matters: `npx` caches the package on first run and reuses the cached copy on later runs without checking for updates. Without `@latest` you can stay stuck on an old version (e.g. pre-1.12.0 tools that no longer exist server-side) with no error telling you why. Tradeoff: `@latest` resolves the version against the registry on every launch, so startups need registry access — no offline starts from the npx cache.
 
 ### OpenCode
 
