@@ -54,7 +54,7 @@ For OpenCode, Claude Desktop, Cursor, and other local clients using stdio:
   "mcpServers": {
     "post-engineer": {
       "type": "local",
-      "command": ["npx", "-y", "post-engineer-mcp"],
+      "command": ["npx", "-y", "post-engineer-mcp@latest"],
       "environment": {
         "POST_ENGINEER_API_KEY": "<USER_POST_ENGINEER_API_KEY>"
       }
@@ -62,6 +62,8 @@ For OpenCode, Claude Desktop, Cursor, and other local clients using stdio:
   }
 }
 \`\`\`
+
+> The \`@latest\` tag matters: \`npx\` caches the package on first run and reuses the cached copy on later runs without checking for updates. Without \`@latest\` you can stay stuck on an old version with no error telling you why.
 
 ## Available tools
 

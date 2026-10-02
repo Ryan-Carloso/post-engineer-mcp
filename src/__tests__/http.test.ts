@@ -51,7 +51,11 @@ describe('remote HTTP server', () => {
 
     const docsMarkdown = await fetch(`${baseUrl}/docs.md`);
     expect(docsMarkdown.status).toBe(200);
-    expect(await docsMarkdown.text()).toContain('https://mcp.post-engineer.com/');
+    const docsMarkdownText = await docsMarkdown.text();
+    expect(docsMarkdownText).toContain('https://mcp.post-engineer.com/');
+    // The documented npx command must pin @latest: a bare package name lets
+    // npx reuse its stale cache without checking for updates.
+    expect(docsMarkdownText).toContain('post-engineer-mcp@latest');
   });
 
   it('answers CORS preflight requests', async () => {
